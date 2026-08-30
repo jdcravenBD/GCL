@@ -1,0 +1,466 @@
+/* Greyscale only. Every colour here is a neutral: R, G and B are always equal,
+   so nothing carries a hue. Dark theme is fixed, not system-dependent. */
+
+:root {
+  color-scheme: dark;
+
+  --bg: #131313;
+  /* Kept in sync by hand with the stroke colour baked into the #stage
+     data-URI below; a var() cannot reach inside that URL. Holds the same
+     5-step gap over --bg that it had at the older, darker values. */
+  --plus: #181818;
+
+  --panel: #1c1c1c;
+  --panel-2: #232323;
+  --well: #0a0a0a;
+
+  /* Field labels sit just above the card in value. Must stay lighter than
+     --panel, but well below --ink so the values still read first. */
+  --label: #3a3a3a;
+
+  /* The two deliberate exceptions to the greyscale rule: hyperlink blue for
+     URLs, and a warning orange for failed lookups. */
+  --link: #58a6ff;
+  --warn: #e08b3d;
+
+  --edge: #2e2e2e;
+  --edge-hi: #4a4a4a;
+  --edge-focus: #8a8a8a;
+
+  --ink: #e8e8e8;
+  --ink-dim: #9a9a9a;
+  --ink-faint: #6a6a6a;
+  --ink-ghost: #4a4a4a;
+
+  --bright: #ededed;
+  --bright-ink: #101010;
+
+  /* Connectors: barely there until they matter. */
+  --port: #303030;
+  --port-live: #d8d8d8;
+  --wire: #4e4e4e;
+
+  --radius: 10px;
+  --thumb-radius: 8px;
+  --bar-h: 56px;
+  --cell: 44px;
+
+  --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+/* Typeface options, switched by the dev buttons in the bar. */
+:root[data-font="inter"]   { --font: "Inter", "Segoe UI", system-ui, sans-serif; }
+:root[data-font="plex"]    { --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif; }
+:root[data-font="grotesk"] { --font: "Space Grotesk", "Segoe UI", system-ui, sans-serif; }
+:root[data-font="mono"]    { --font: "JetBrains Mono", ui-monospace, Consolas, monospace; }
+
+* { box-sizing: border-box; }
+
+/* Class-level `display` beats the UA rule for [hidden], which would otherwise
+   leave the empty-state and status overlays permanently visible. */
+[hidden] { display: none !important; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 var(--font);
+}
+
+/* Each button renders in the face it selects, so the bar doubles as a specimen. */
+.font-btn { font-size: 12px; padding: 6px 8px; }
+.font-btn[data-font="ui"]      { font-family: "Segoe UI", system-ui, sans-serif; }
+.font-btn[data-font="inter"]   { font-family: "Inter", sans-serif; }
+.font-btn[data-font="plex"]    { font-family: "IBM Plex Sans", sans-serif; }
+.font-btn[data-font="grotesk"] { font-family: "Space Grotesk", sans-serif; }
+.font-btn[data-font="mono"]    { font-family: "JetBrains Mono", monospace; }
+.font-btn.on {
+  background: var(--bright);
+  color: var(--bright-ink);
+  border-color: var(--bright);
+}
+
+/* ---------- top bar ---------- */
+
+.bar {
+  height: var(--bar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--edge);
+  position: relative;
+  z-index: 20;
+}
+
+.brand { display: flex; align-items: baseline; gap: 8px; }
+.brand .mark {
+  width: 10px; height: 10px; border-radius: 2px;
+  background: var(--ink-dim);
+  transform: rotate(45deg);
+  align-self: center;
+}
+.brand strong { letter-spacing: 0.08em; font-size: 15px; }
+.brand .sub { color: var(--ink-faint); font-size: 12px; }
+
+.bar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.group { display: flex; gap: 4px; }
+
+.btn {
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--edge);
+  border-radius: 7px;
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover { border-color: var(--edge-hi); background: #2c2c2c; }
+.btn:active { transform: translateY(1px); }
+.btn.primary {
+  background: var(--bright);
+  color: var(--bright-ink);
+  border-color: var(--bright);
+  font-weight: 600;
+}
+.btn.primary:hover { background: #fff; border-color: #fff; }
+.btn.danger:hover { border-color: var(--edge-focus); color: #fff; }
+.btn.icon { width: 30px; padding: 6px 0; text-align: center; }
+
+.total {
+  display: flex; flex-direction: column; align-items: flex-end;
+  padding: 0 12px;
+  border-left: 1px solid var(--edge);
+  border-right: 1px solid var(--edge);
+  line-height: 1.15;
+}
+.total-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em;
+  color: var(--ink-faint);
+}
+#total { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--bright); }
+
+/* ---------- canvas ---------- */
+
+/* A plus mark at every grid intersection, tiled. The background-position and
+   background-size are driven from JS so the field pans and zooms with the
+   cards rather than sitting still underneath them. */
+#stage {
+  position: absolute;
+  inset: var(--bar-h) 0 0 0;
+  overflow: hidden;
+  cursor: grab;
+  background-color: var(--bg);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cpath d='M22 18.5v7M18.5 22h7' stroke='%23181818' stroke-width='1.75' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: var(--cell) var(--cell);
+  background-repeat: repeat;
+}
+#stage.panning { cursor: grabbing; }
+
+#world {
+  position: absolute;
+  top: 0; left: 0;
+  width: 0; height: 0;
+  transform-origin: 0 0;
+}
+
+.empty-hint {
+  position: absolute;
+  top: 42%; left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--ink-faint);
+  pointer-events: none;
+  margin: 0;
+}
+.empty-hint strong { color: var(--ink-dim); }
+
+/* ---------- connectors and wires ---------- */
+
+/* The SVG is a 1px anchor at the world origin with clipping switched off, so
+   paths can be drawn straight in world coordinates at any offset. */
+#wires {
+  position: absolute;
+  left: 0; top: 0;
+  width: 1px; height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 0;
+}
+.wire {
+  fill: none;
+  stroke: var(--wire);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.wire-pending {
+  stroke: var(--port-live);
+  stroke-dasharray: 5 4;
+}
+
+/* Faint until connected or in play, then bright. Centred on the card edge, so
+   they read as sockets on the boundary rather than decorations inside it. */
+.port {
+  position: absolute;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--port);
+  cursor: crosshair;
+  z-index: 3;
+  transition: background-color .15s ease, box-shadow .15s ease;
+}
+.port:hover { background: #8a8a8a; }
+.port.live {
+  background: var(--port-live);
+  box-shadow: 0 0 0 3px rgba(216, 216, 216, .14);
+}
+.port.pl { left: -6px; top: calc(50% - 6px); }
+.port.pr { right: -6px; top: calc(50% - 6px); }
+.port.pt { top: -6px; left: calc(50% - 6px); }
+.port.pb { bottom: -6px; left: calc(50% - 6px); }
+
+/* ---------- card ---------- */
+
+.card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .5);
+  /* No overflow clipping: the connector dots straddle the card's edges. Every
+     child is inset by the padding, so nothing else spills. */
+  touch-action: none;
+}
+.card.dragging {
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .7);
+  border-color: var(--edge-focus);
+}
+
+/* Inset on all four sides so the photo sits fully inside the block, with the
+   same radius on every corner rather than following the card's outline. */
+.thumb {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--well);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--thumb-radius);
+}
+.thumb .shot {
+  width: 100%; height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+}
+.thumb-empty {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  color: var(--ink-faint); font-size: 12px; text-align: center; padding: 8px;
+}
+.thumb-empty small { font-size: 11px; color: var(--ink-ghost); }
+.thumb-status {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(10, 10, 10, .86);
+  font-size: 12px; color: var(--ink-dim); text-align: center; padding: 10px;
+}
+
+/* The glyph sits bare on the photo — the box only appears under the cursor.
+   A drop shadow carries it over light product shots in the meantime. */
+.nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 28px; height: 28px;
+  padding: 0;
+  background: transparent;
+  color: var(--bright);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+  transition: opacity .12s, background-color .16s ease;
+}
+.thumb:hover .nav { opacity: 1; }
+.nav:hover { background: rgba(10, 10, 10, .55); }
+/* Inset from the edge so they float inside the rounded photo rather than
+   being sliced by its corner radius. */
+.nav.prev { left: 5px; }
+.nav.next { right: 5px; }
+
+.counter {
+  position: absolute; bottom: 6px; right: 6px;
+  background: rgba(10, 10, 10, .78);
+  color: var(--ink-dim);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 6px;
+  border-radius: 20px;
+}
+
+/* min-height: 0 lets the thumb shrink inside the flex column instead of
+   forcing the card taller than its fixed height. */
+.fields {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.row { display: flex; gap: 6px; }
+
+/* Everything except the photo holds its natural height; the thumb alone takes
+   up the slack, so the notes box can't get squeezed into a scrollbar. */
+.fields > .row,
+.fields > .msg,
+.fields > .f-notes { flex: 0 0 auto; }
+
+/* Fields carry no chrome at rest — the text simply sits on the block. The
+   transparent border keeps box metrics stable so nothing shifts when the
+   hover panel appears. */
+.fields input, .fields textarea {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 2px 5px;
+  resize: none;
+  transition: background-color .16s ease;
+}
+
+/* A pale rounded panel fades up under the cursor to say "this is editable",
+   and stays up while the field is focused so the target doesn't vanish mid-
+   edit. White at low alpha reads as a neutral lift, so no hue is introduced. */
+.fields input:hover, .fields textarea:hover {
+  background: rgba(255, 255, 255, .055);
+}
+.fields input:focus, .fields textarea:focus {
+  outline: none;
+  background: rgba(255, 255, 255, .085);
+}
+
+/* Set just above the block in value so it recedes behind the value it names,
+   at the same size as the text in the field. */
+.f-label {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--label);
+  user-select: none;
+  white-space: nowrap;
+}
+.fields input::placeholder, .fields textarea::placeholder { color: var(--ink-ghost); }
+/* Name, price and quantity share one line, so the two numeric fields are
+   sized to their content and the name takes whatever is left. */
+/* Indented by the notes field's own border + padding (1px + 5px) so "Name"
+   starts on the same vertical as the notes placeholder below it. */
+.meta-row { gap: 5px; padding-left: 6px; }
+.f-title { flex: 1 1 auto; min-width: 0; font-weight: 600; }
+.f-price { flex: 0 0 62px; font-variant-numeric: tabular-nums; }
+.f-qty { flex: 0 0 38px; font-variant-numeric: tabular-nums; }
+
+/* The URL keeps hyperlink blue — the one deliberate hue in the interface,
+   because a link that isn't blue doesn't read as a link. The selector has to
+   out-specify `.fields input` above, which would otherwise win on specificity
+   no matter where this rule sits. */
+.fields input.f-url {
+  flex: 1 1 auto;
+  color: var(--link);
+  /* A URL too long for the block fades out at the right edge instead of being
+     hard-clipped mid-character. */
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 85px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 85px), transparent);
+}
+/* Unmasked while editing, so the caret stays visible at the end of a long URL. */
+.fields input.f-url:focus {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+/* The mask above would fade the right edge of the input's own hover panel too,
+   so for the URL that panel lives on the row wrapper instead. */
+.fields input.f-url:hover,
+.fields input.f-url:focus { background: transparent; }
+
+/* Pulled tight to the top edge and to the photo below it. */
+.fields > .url-row {
+  margin: -3px 0 -2px;
+  border-radius: 6px;
+  transition: background-color .16s ease;
+}
+.url-row:hover { background: rgba(255, 255, 255, .055); }
+.url-row:focus-within { background: rgba(255, 255, 255, .085); }
+
+/* No hue available, so success and failure separate by weight and brightness:
+   a problem reads bright against a lighter well, a confirmation stays quiet. */
+.msg {
+  font-size: 11.5px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  border-left: 2px solid transparent;
+}
+/* No backdrop — just an orange rule and matching text. Square corners keep the
+   rule running straight from top to bottom instead of tapering at the ends. */
+.msg.err {
+  background: transparent;
+  border-radius: 0;
+  border-left-color: var(--warn);
+  color: var(--warn);
+  font-weight: 500;
+}
+.msg.ok {
+  background: #1c1c1c;
+  border-left-color: var(--ink-ghost);
+  color: var(--ink-dim);
+}
+
+/* Sits flush on the block — no separating rule, no lighter footer band. */
+.card-tools {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 14px 9px;
+  font-size: 11.5px;
+}
+/* The anchor and the buttons resolve their line boxes differently, which left
+   "Open page" sitting lower than the rest. Same display mode and line-height
+   on both puts them on one line. */
+.card-tools .open,
+.card-tools .link-btn {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+.card-tools .open { color: var(--ink-dim); text-decoration: none; }
+.card-tools .open:hover { color: var(--bright); }
+.link-btn {
+  background: none; border: none; padding: 0;
+  color: var(--ink-faint); font: inherit; font-size: 11.5px;
+  cursor: pointer;
+}
+.link-btn:hover { color: var(--ink); }
+.link-btn.del { margin-left: auto; }
+.link-btn.del:hover { color: #fff; }
+
+@media (max-width: 720px) {
+  .bar { height: auto; padding: 8px; }
+  .bar-actions { gap: 6px; }
+  #stage { top: 96px; }
+}

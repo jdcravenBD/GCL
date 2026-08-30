@@ -1,0 +1,13 @@
+{
+  "name": "gcl",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Guitar parts layout board with product-URL image scraping",
+  "scripts": {
+    "dev": "wrangler pages dev",
+    "deploy": "wrangler pages deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

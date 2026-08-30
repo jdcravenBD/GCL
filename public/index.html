@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GCL — Guitar Parts Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <span class="mark"></span>
+    <strong>GCL</strong>
+    <span class="sub">parts board</span>
+  </div>
+
+  <div class="bar-actions">
+    <button id="add" class="btn primary">+ Add part</button>
+    <div class="group">
+      <button id="zoom-out" class="btn icon" title="Zoom out">&minus;</button>
+      <button id="zoom-reset" class="btn" title="Reset view">100%</button>
+      <button id="zoom-in" class="btn icon" title="Zoom in">+</button>
+    </div>
+    <div class="total" title="Sum of all part prices">
+      <span class="total-label">Build total</span>
+      <span id="total">$0.00</span>
+    </div>
+    <div class="group">
+      <button id="export" class="btn">Export</button>
+      <button id="import" class="btn">Import</button>
+      <button id="clear" class="btn danger">Clear</button>
+    </div>
+
+    <!-- Dev-only typeface switcher. Each button previews its own face. -->
+    <div class="group fonts" title="Typeface (dev)">
+      <button class="btn font-btn" data-font="ui">Segoe</button>
+      <button class="btn font-btn" data-font="inter">Inter</button>
+      <button class="btn font-btn" data-font="plex">Plex</button>
+      <button class="btn font-btn" data-font="grotesk">Grotesk</button>
+      <button class="btn font-btn" data-font="mono">Mono</button>
+    </div>
+  </div>
+</header>
+
+<main id="stage">
+  <div id="world">
+    <!-- Connection wires. Lives inside #world so it pans and zooms with the
+         cards, and sits behind them in stacking order. -->
+    <svg id="wires"></svg>
+  </div>
+  <p id="empty" class="empty-hint">
+    Click <strong>+ Add part</strong> to drop your first block.<br>
+    Drag the background to pan &middot; Scroll to zoom
+  </p>
+</main>
+
+<input type="file" id="import-file" accept="application/json" hidden>
+
+<!-- Card template, cloned for each part -->
+<template id="card-tpl">
+  <article class="card">
+    <div class="fields">
+      <div class="row url-row">
+        <input class="f-url" type="url" placeholder="Product URL" spellcheck="false"
+               title="Images load when you click away from this field">
+      </div>
+
+      <div class="thumb">
+        <img class="shot" alt="" referrerpolicy="no-referrer" hidden>
+        <div class="thumb-empty">
+          <span>No image yet</span>
+          <small>Paste a product URL above</small>
+        </div>
+        <div class="thumb-status" hidden></div>
+        <button class="nav prev" title="Previous image" hidden>&#8249;</button>
+        <button class="nav next" title="Next image" hidden>&#8250;</button>
+        <div class="counter" hidden></div>
+      </div>
+
+      <div class="msg" hidden></div>
+
+      <div class="row meta-row">
+        <span class="f-label">Name</span>
+        <input class="f-title" type="text" spellcheck="false">
+        <span class="f-label">Price</span>
+        <input class="f-price" type="text" inputmode="decimal" placeholder="0.00">
+        <span class="f-label">Qty</span>
+        <input class="f-qty" type="text" inputmode="numeric" placeholder="1">
+      </div>
+
+      <textarea class="f-notes" rows="2" placeholder="Notes (spec, finish, vendor…)"></textarea>
+    </div>
+
+    <div class="card-tools">
+      <a class="open" target="_blank" rel="noopener noreferrer" hidden>Open page &#8599;</a>
+      <button class="link-btn manual">Paste image URL</button>
+      <button class="link-btn del">Delete</button>
+    </div>
+
+    <!-- One connector per side, centred on the edge. -->
+    <span class="port pl" data-side="l"></span>
+    <span class="port pr" data-side="r"></span>
+    <span class="port pt" data-side="t"></span>
+    <span class="port pb" data-side="b"></span>
+  </article>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
