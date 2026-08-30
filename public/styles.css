@@ -616,9 +616,10 @@ html, body {
 .fields input::placeholder, .fields textarea::placeholder { color: var(--ink-ghost); }
 /* Name, price and quantity share one line, so the two numeric fields are
    sized to their content and the name takes whatever is left. */
-/* Indented by the notes field's own border + padding (1px + 5px) so "Name"
-   starts on the same vertical as the notes placeholder below it. */
-.meta-row { gap: 5px; padding-left: 6px; }
+/* The type button carries the indent itself — 1px border + 5px padding, the
+   same as the notes field below — so its text starts on that same vertical.
+   The row adds nothing, or the two offsets would stack. */
+.meta-row { gap: 5px; padding-left: 0; }
 .f-title { font-weight: 600; }
 .f-price, .f-qty { font-variant-numeric: tabular-nums; }
 
@@ -634,7 +635,7 @@ html, body {
   background: none;
   border: 1px solid transparent;
   border-radius: 3px;
-  padding: 2px 4px;
+  padding: 2px 5px;
   cursor: pointer;
   text-align: left;
   /* Buttons don't inherit the page face by default, which left this one
@@ -810,4 +811,205 @@ html, body {
 .btn:disabled:hover {
   background: var(--panel-2);
   border-color: var(--edge);
+}
+
+/* ---------- summary panel ---------- */
+
+/* Sits inside the same frame as the canvas and slides over it, rather than
+   resizing the board — the cards stay exactly where you left them. */
+.summary {
+  position: fixed;
+  top: var(--bar-h);
+  right: var(--frame);
+  bottom: var(--frame);
+  width: 348px;
+  max-width: calc(100vw - var(--frame) * 2);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: var(--inner-radius);
+  box-shadow: -14px 0 40px rgba(0, 0, 0, .55);
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(14px);
+  transition: transform .2s ease, opacity .2s ease, visibility .2s;
+}
+.summary.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.sum-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+}
+.sum-head strong { font-size: 14px; letter-spacing: .02em; }
+
+.sum-totals {
+  display: flex;
+  gap: 6px;
+  padding: 0 14px 12px;
+}
+.sum-stat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .034);
+}
+.sum-k {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+  color: var(--ink-faint);
+}
+.sum-v {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+#sum-total { color: var(--bright); }
+
+/* Segmented control for the grouping. Same borderless language as the fields:
+   a pale panel marks the active choice rather than an outline. */
+.seg {
+  display: flex;
+  gap: 2px;
+  margin: 0 14px 10px;
+  padding: 3px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .034);
+}
+.seg-btn {
+  flex: 1 1 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--ink-faint);
+  font: inherit;
+  font-size: 12px;
+  padding: 5px 0;
+  cursor: pointer;
+  transition: background-color .16s ease, color .16s ease;
+}
+.seg-btn:hover { color: var(--ink-dim); }
+.seg-btn.on { background: rgba(255, 255, 255, .1); color: var(--ink); font-weight: 600; }
+
+.sum-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 8px 8px;
+}
+.sum-list::-webkit-scrollbar { width: 9px; }
+.sum-list::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: 20px;
+  border: 3px solid var(--panel);
+}
+.sum-list::-webkit-scrollbar-thumb:hover { background: var(--edge-hi); }
+
+.sum-group { margin-bottom: 10px; }
+.sum-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 6px 5px;
+  border-bottom: 1px solid var(--edge);
+  margin-bottom: 3px;
+}
+.sum-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sum-group-count { font-size: 11px; color: var(--ink-ghost); }
+.sum-group-sub {
+  margin-left: auto;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+
+/* One row per part. Clicking it takes you to that block on the canvas. */
+.sum-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  border: none;
+  background: none;
+  border-radius: 5px;
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .14s ease;
+}
+.sum-row:hover { background: rgba(255, 255, 255, .05); }
+.sum-row-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sum-row-name.untitled { color: var(--ink-ghost); font-style: italic; }
+.sum-row-qty {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+}
+.sum-row-price {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-dim);
+}
+.sum-row-price.none { color: var(--ink-ghost); }
+
+.sum-empty {
+  padding: 22px 10px;
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: 12.5px;
+}
+
+.sum-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 14px 11px;
+  border-top: 1px solid var(--edge);
+}
+.sum-exports { display: flex; gap: 2px; }
+.sum-exports .link-btn {
+  padding: 5px 7px;
+  border-radius: 5px;
+  transition: background-color .14s ease, color .16s ease;
+}
+.sum-exports .link-btn:hover { background: rgba(255, 255, 255, .06); }
+
+/* Brief pulse when a summary row sends you to its card. */
+.card.flash {
+  border-color: var(--edge-focus);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .13), 0 16px 40px rgba(0, 0, 0, .7);
+}
+
+@media (max-width: 560px) {
+  .summary { width: auto; left: var(--frame); }
 }

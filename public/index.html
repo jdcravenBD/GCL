@@ -40,8 +40,9 @@
       <span class="total-label">Build total</span>
       <span id="total">$0.00</span>
     </div>
+    <button id="summary-toggle" class="btn">Summary</button>
     <div class="group">
-      <button id="export" class="btn">Export</button>
+      <button id="export" class="btn" title="Save the whole board as a file you can re-import">Export</button>
       <button id="import" class="btn">Import</button>
       <button id="clear" class="btn danger">Clear</button>
     </div>
@@ -73,6 +74,37 @@
   <!-- Ctrl/Shift-drag marquee. Visual only for now. -->
   <div id="marquee"></div>
 </main>
+
+<!-- Parts list, grouped. Slides over the canvas from the right. -->
+<aside id="summary" class="summary" aria-label="Parts summary">
+  <div class="sum-head">
+    <strong>Summary</strong>
+    <button type="button" id="sum-close" class="link-btn">Close</button>
+  </div>
+
+  <div class="sum-totals">
+    <div class="sum-stat"><span class="sum-k">Parts</span><span class="sum-v" id="sum-parts">0</span></div>
+    <div class="sum-stat"><span class="sum-k">Items</span><span class="sum-v" id="sum-items">0</span></div>
+    <div class="sum-stat"><span class="sum-k">Total</span><span class="sum-v" id="sum-total">$0.00</span></div>
+  </div>
+
+  <div class="seg" id="sum-group">
+    <button type="button" class="seg-btn on" data-group="vendor">Vendor</button>
+    <button type="button" class="seg-btn" data-group="type">Type</button>
+    <button type="button" class="seg-btn" data-group="status">Status</button>
+  </div>
+
+  <div class="sum-list" id="sum-list"></div>
+
+  <div class="sum-foot">
+    <span class="sum-k">Export list</span>
+    <div class="sum-exports">
+      <button type="button" class="link-btn" data-export="md">Markdown</button>
+      <button type="button" class="link-btn" data-export="csv">CSV</button>
+      <button type="button" class="link-btn" data-export="copy">Copy</button>
+    </div>
+  </div>
+</aside>
 
 <!-- Shared right-click menu, filled in per context when opened. -->
 <div id="ctx" class="ctx"></div>

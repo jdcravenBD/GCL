@@ -62,6 +62,9 @@
     } catch (e) {
       console.warn('Could not save board:', e);
     }
+    // Rides the existing save debounce, so the panel tracks edits without
+    // rebuilding its list on every keystroke.
+    if (summaryOpen) renderSummary();
   }
 
   /* --------------------------------------------------------------- history */
@@ -1327,6 +1330,291 @@
     closeCtx(); closeConfirm(); closePaste();
   });
 
+  /* --------------------------------------------------------- summary panel */
+
+  var summaryEl = document.getElementById('summary');
+  var sumList = document.getElementById('sum-list');
+  var summaryOpen = false;
+  var groupMode = 'vendor';
+
+  /** Store name from the product URL — no extra field for the user to fill. */
+  function vendorOf(block) {
+    var u = String(block.url || '').trim();
+    if (!u) return 'No vendor';
+    try {
+      return new URL(u).hostname.replace(/^www\./i, '').toLowerCase();
+    } catch (e) {
+      return 'No vendor';
+    }
+  }
+
+  function groupKeyFor(block) {
+    if (groupMode === 'type') return block.type || DEFAULT_TYPE;
+    if (groupMode === 'status') return block.status || DEFAULT_STATUS;
+    return vendorOf(block);
+  }
+
+  function lineTotal(block) {
+    return parseMoney(block.price) * parseQty(block.qty);
+  }
+
+  function money(n) {
+    return '$' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
+
+  /**
+   * Blocks bucketed by the current grouping. Vendors sort by spend — the store
+   * you owe the most to first — while type and status keep their own running
+   * order so the list reads like a build rather than an alphabet.
+   */
+  function buildGroups() {
+    var map = new Map();
+    state.blocks.forEach(function (b) {
+      var key = groupKeyFor(b);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(b);
+    });
+
+    var groups = [];
+    map.forEach(function (items, key) {
+      groups.push({
+        key: key,
+        items: items,
+        subtotal: items.reduce(function (sum, b) { return sum + lineTotal(b); }, 0),
+        units: items.reduce(function (sum, b) { return sum + parseQty(b.qty); }, 0)
+      });
+    });
+
+    var order = groupMode === 'type' ? PART_TYPES
+      : groupMode === 'status' ? STATUSES
+      : null;
+
+    groups.sort(function (a, b) {
+      if (order) {
+        var ai = order.indexOf(a.key);
+        var bi = order.indexOf(b.key);
+        return (ai < 0 ? 999 : ai) - (bi < 0 ? 999 : bi);
+      }
+      if (b.subtotal !== a.subtotal) return b.subtotal - a.subtotal;
+      return a.key.localeCompare(b.key);
+    });
+    return groups;
+  }
+
+  function renderSummary() {
+    var groups = buildGroups();
+    var units = 0;
+    var total = 0;
+    state.blocks.forEach(function (b) {
+      units += parseQty(b.qty);
+      total += lineTotal(b);
+    });
+
+    document.getElementById('sum-parts').textContent = state.blocks.length;
+    document.getElementById('sum-items').textContent = units;
+    document.getElementById('sum-total').textContent = money(total);
+
+    sumList.innerHTML = '';
+    if (!state.blocks.length) {
+      var empty = document.createElement('p');
+      empty.className = 'sum-empty';
+      empty.textContent = 'Nothing on the board yet.';
+      sumList.appendChild(empty);
+      return;
+    }
+
+    groups.forEach(function (g) {
+      var wrap = document.createElement('div');
+      wrap.className = 'sum-group';
+
+      var head = document.createElement('div');
+      head.className = 'sum-group-head';
+      var name = document.createElement('span');
+      name.className = 'sum-group-name';
+      name.textContent = g.key;
+      var count = document.createElement('span');
+      count.className = 'sum-group-count';
+      count.textContent = g.items.length + (g.items.length === 1 ? ' part' : ' parts');
+      var sub = document.createElement('span');
+      sub.className = 'sum-group-sub';
+      sub.textContent = money(g.subtotal);
+      head.appendChild(name);
+      head.appendChild(count);
+      head.appendChild(sub);
+      wrap.appendChild(head);
+
+      g.items.forEach(function (b) {
+        var row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'sum-row';
+
+        var label = document.createElement('span');
+        label.className = 'sum-row-name';
+        if (b.title) {
+          label.textContent = b.title;
+        } else {
+          label.textContent = 'Untitled ' + (b.type || DEFAULT_TYPE).toLowerCase();
+          label.classList.add('untitled');
+        }
+
+        var qty = document.createElement('span');
+        qty.className = 'sum-row-qty';
+        var q = parseQty(b.qty);
+        qty.textContent = q > 1 ? '×' + q : '';
+
+        var price = document.createElement('span');
+        price.className = 'sum-row-price';
+        var value = lineTotal(b);
+        if (value > 0) {
+          price.textContent = money(value);
+        } else {
+          price.textContent = '—';
+          price.classList.add('none');
+        }
+
+        row.appendChild(label);
+        row.appendChild(qty);
+        row.appendChild(price);
+        row.addEventListener('click', function () { focusBlock(b.id); });
+        wrap.appendChild(row);
+      });
+
+      sumList.appendChild(wrap);
+    });
+  }
+
+  /** Centre the canvas on a block and pulse it, so a row points somewhere. */
+  function focusBlock(id) {
+    var b = findBlock(id);
+    if (!b) return;
+    var v = state.view;
+    // Aim at the middle of what's actually visible beside the open panel.
+    var usableW = stage.clientWidth - (summaryOpen ? summaryEl.offsetWidth + 20 : 0);
+    v.x = usableW / 2 - (b.x + b.w / 2) * v.s;
+    v.y = stage.clientHeight / 2 - (b.y + b.h / 2) * v.s;
+    applyView();
+
+    var entry = nodes.get(id);
+    if (entry) {
+      bringToFront(b, entry.el);
+      entry.el.classList.add('flash');
+      setTimeout(function () { entry.el.classList.remove('flash'); }, 850);
+    }
+    save();
+  }
+
+  function setSummaryOpen(open) {
+    summaryOpen = open;
+    summaryEl.classList.toggle('show', open);
+    document.getElementById('summary-toggle').classList.toggle('primary', open);
+    if (open) renderSummary();
+  }
+
+  document.getElementById('summary-toggle').addEventListener('click', function () {
+    setSummaryOpen(!summaryOpen);
+  });
+  document.getElementById('sum-close').addEventListener('click', function () {
+    setSummaryOpen(false);
+  });
+
+  document.getElementById('sum-group').addEventListener('click', function (e) {
+    var btn = e.target.closest('.seg-btn');
+    if (!btn) return;
+    groupMode = btn.dataset.group;
+    [].forEach.call(this.querySelectorAll('.seg-btn'), function (b) {
+      b.classList.toggle('on', b === btn);
+    });
+    renderSummary();
+  });
+
+  /* ------------------------------------------------------------ list export */
+
+  function boardTitle() {
+    return (state.name || '').trim() || 'Untitled board';
+  }
+
+  function summaryAsMarkdown() {
+    var lines = ['# ' + boardTitle(), ''];
+    var total = 0;
+    buildGroups().forEach(function (g) {
+      lines.push('## ' + g.key + ' — ' + g.items.length +
+        (g.items.length === 1 ? ' part' : ' parts') + ' — ' + money(g.subtotal));
+      lines.push('');
+      g.items.forEach(function (b) {
+        var q = parseQty(b.qty);
+        var bits = [b.title || 'Untitled ' + (b.type || DEFAULT_TYPE).toLowerCase()];
+        bits.push(b.type || DEFAULT_TYPE);
+        if (q > 1) bits.push('×' + q);
+        if (lineTotal(b) > 0) bits.push(money(lineTotal(b)));
+        bits.push(b.status || DEFAULT_STATUS);
+        var line = '- [ ] ' + bits.join(' — ');
+        if (b.url) line += '  \n  ' + b.url;
+        lines.push(line);
+        total += lineTotal(b);
+      });
+      lines.push('');
+    });
+    lines.push('**Build total: ' + money(total) + '**');
+    return lines.join('\n');
+  }
+
+  function summaryAsCsv() {
+    var rows = [['Type', 'Name', 'Vendor', 'Qty', 'Unit price', 'Line total', 'Status', 'URL']];
+    // Quote every field and double any inner quotes, so names containing
+    // commas or quotes survive the round trip into a spreadsheet.
+    var esc = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+    buildGroups().forEach(function (g) {
+      g.items.forEach(function (b) {
+        rows.push([
+          b.type || DEFAULT_TYPE,
+          b.title || '',
+          vendorOf(b),
+          parseQty(b.qty),
+          parseMoney(b.price).toFixed(2),
+          lineTotal(b).toFixed(2),
+          b.status || DEFAULT_STATUS,
+          b.url || ''
+        ]);
+      });
+    });
+    return rows.map(function (r) { return r.map(esc).join(','); }).join('\r\n');
+  }
+
+  function download(text, mime, extension) {
+    var blob = new Blob([text], { type: mime });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = exportFilename(extension);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+  }
+
+  document.querySelector('.sum-exports').addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-export]');
+    if (!btn) return;
+    var kind = btn.dataset.export;
+
+    if (kind === 'md') {
+      download(summaryAsMarkdown(), 'text/markdown;charset=utf-8', 'md');
+    } else if (kind === 'csv') {
+      download(summaryAsCsv(), 'text/csv;charset=utf-8', 'csv');
+    } else if (kind === 'copy') {
+      var original = btn.textContent;
+      var done = function (ok) {
+        btn.textContent = ok ? 'Copied' : 'Failed';
+        setTimeout(function () { btn.textContent = original; }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(summaryAsMarkdown()).then(
+          function () { done(true); },
+          function () { done(false); }
+        );
+      } else {
+        done(false);
+      }
+    }
+  });
+
   /* ----------------------------------------------------------- part types */
 
   // Ordered roughly the way a guitar goes together, so the menu reads like a
@@ -1436,13 +1724,13 @@
   });
 
   /** Board name reduced to something safe to use as a filename. */
-  function exportFilename() {
+  function exportFilename(extension) {
     var base = (state.name || '').trim()
       .replace(/[\\/:*?"<>|]+/g, '')  // characters filesystems reject
       .replace(/\s+/g, '-')
       .replace(/^[.-]+|[.-]+$/g, '')
       .slice(0, 60);
-    return (base || 'gcl-board') + '.json';
+    return (base || 'gcl-board') + '.' + (extension || 'json');
   }
 
   document.getElementById('export').addEventListener('click', function () {
@@ -1451,7 +1739,7 @@
     });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = exportFilename();
+    a.download = exportFilename('json');
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   });
