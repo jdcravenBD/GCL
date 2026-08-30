@@ -365,6 +365,20 @@ html, body {
   background: var(--port-live);
   box-shadow: 0 0 0 2px rgba(216, 216, 216, .14);
 }
+/* Resize grips. Invisible; the cursor is the only affordance. Edge strips are
+   inset 22px so they clear the connector dot at each midpoint, and sit at a
+   lower z-index than the ports as a second line of defence. */
+.rz { position: absolute; z-index: 2; }
+.rz-n { top: -3px; left: 22px; right: 22px; height: 8px; cursor: ns-resize; }
+.rz-s { bottom: -3px; left: 22px; right: 22px; height: 8px; cursor: ns-resize; }
+.rz-w { left: -3px; top: 22px; bottom: 22px; width: 8px; cursor: ew-resize; }
+.rz-e { right: -3px; top: 22px; bottom: 22px; width: 8px; cursor: ew-resize; }
+/* Corners sit above the ports, but never overlap them anyway. */
+.rz-nw { top: -4px; left: -4px; width: 15px; height: 15px; cursor: nwse-resize; z-index: 4; }
+.rz-ne { top: -4px; right: -4px; width: 15px; height: 15px; cursor: nesw-resize; z-index: 4; }
+.rz-sw { bottom: -4px; left: -4px; width: 15px; height: 15px; cursor: nesw-resize; z-index: 4; }
+.rz-se { bottom: -4px; right: -4px; width: 15px; height: 15px; cursor: nwse-resize; z-index: 4; }
+
 .port.pl { left: -4.5px; top: calc(50% - 4.5px); }
 .port.pr { right: -4.5px; top: calc(50% - 4.5px); }
 .port.pt { top: -4.5px; left: calc(50% - 4.5px); }
@@ -463,30 +477,38 @@ html, body {
 /* Sits opposite the counter, on the same dark capsule so it stays readable
    over a white studio shot or a black one alike. With no hue available the
    four states separate by weight and brightness, ending in a filled chip. */
+/* Frosted capsule: the tint is translucent and the photo behind it is blurred,
+   so the label holds up over a white studio shot or a dark one alike without
+   needing an opaque plate. */
 .status {
   position: absolute; top: 6px; left: 6px;
   z-index: 2;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, .18);
   border-radius: 20px;
-  padding: 3px 8px;
+  padding: 3px 9px;
   font: inherit;
   font-size: 10px;
+  font-weight: 600;
   letter-spacing: .07em;
   text-transform: uppercase;
   cursor: pointer;
-  background: rgba(10, 10, 10, .78);
-  color: var(--ink-faint);
-  transition: background-color .15s ease, color .15s ease;
+  backdrop-filter: blur(7px) saturate(1.3);
+  -webkit-backdrop-filter: blur(7px) saturate(1.3);
+  background: rgba(255, 255, 255, .16);
+  color: #f2f2f2;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease;
 }
-.status:hover { color: var(--ink); }
-.status[data-status="Ordered"] { color: var(--ink-dim); }
-.status[data-status="Arrived"] { color: var(--bright); }
-.status[data-status="Installed"] {
-  background: rgba(240, 240, 240, .93);
-  color: #101010;
-  font-weight: 700;
+.status[data-status="Ordered"] {
+  background: rgba(224, 150, 60, .26);
+  border-color: rgba(232, 165, 80, .45);
+  color: #ffc98a;
 }
-.status[data-status="Installed"]:hover { background: #fff; color: #000; }
+.status[data-status="Arrived"] {
+  background: rgba(76, 190, 122, .24);
+  border-color: rgba(96, 205, 140, .45);
+  color: #93e5b3;
+}
+.status:hover { border-color: rgba(255, 255, 255, .38); }
 
 .counter {
   position: absolute; bottom: 6px; right: 6px;
@@ -603,7 +625,9 @@ html, body {
 /* Interactive version of the label. Fixed width so choosing a longer type
    doesn't shove the name field around; the text ellipsises instead. */
 .f-type {
-  flex: 0 0 92px;
+  /* Hugs its label rather than reserving a fixed slot, so there's no dead gap
+     before the name field. A longer type simply takes a little more room. */
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -613,13 +637,12 @@ html, body {
   padding: 2px 4px;
   cursor: pointer;
   text-align: left;
+  /* Buttons don't inherit the page face by default, which left this one
+     ignoring the typeface picker. */
+  font-family: inherit;
   transition: background-color .16s ease, color .16s ease;
 }
-.ft-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.ft-text { white-space: nowrap; }
 /* Drawn as a triangle rather than a glyph, so it needs no font support. Sits
    directly after the name, not pushed to the far edge of the fixed slot. */
 .f-type::after {

@@ -6,10 +6,15 @@
   'use strict';
 
   var KEY = 'gcl.board.v1';
-  // Fixed landscape blocks. Resizing is off for now, so every card carries
-  // these dimensions and older saved boards get normalised to them on load.
+  // Starting size for a new block; cards are resizable from any edge or corner.
   var CARD_W = 400;
   var CARD_H = 340;
+  var MIN_W = 320;   // below this the type/name/price/qty row stops fitting
+  var MIN_H = 240;   // leaves the photo roughly 80px once the rows are placed
+  var MAX_W = 1000;
+  var MAX_H = 1000;
+
+  function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 
   var stage = document.getElementById('stage');
   var world = document.getElementById('world');
@@ -662,14 +667,20 @@
         r: el.querySelector('.port.pr'),
         t: el.querySelector('.port.pt'),
         b: el.querySelector('.port.pb')
+      },
+      grips: {
+        n: el.querySelector('.rz-n'), s: el.querySelector('.rz-s'),
+        w: el.querySelector('.rz-w'), e: el.querySelector('.rz-e'),
+        nw: el.querySelector('.rz-nw'), ne: el.querySelector('.rz-ne'),
+        sw: el.querySelector('.rz-sw'), se: el.querySelector('.rz-se')
       }
     };
 
     el.dataset.id = block.id;
-    // Cards are a fixed size now, so any board saved under the old resizable
-    // layout gets pulled back to the current dimensions.
-    block.w = CARD_W;
-    block.h = CARD_H;
+    // Cards are resizable again; only fill in or clamp what's missing or
+    // out of range rather than forcing every block to one size.
+    block.w = clamp(block.w || CARD_W, MIN_W, MAX_W);
+    block.h = clamp(block.h || CARD_H, MIN_H, MAX_H);
     place(el, block);
 
     refs.title.value = block.title || '';
@@ -681,7 +692,10 @@
     // Boards saved before part types and statuses existed take the defaults.
     if (!block.type) block.type = DEFAULT_TYPE;
     refs.typeText.textContent = block.type;
-    if (!block.status) block.status = DEFAULT_STATUS;
+    // "Installed" was dropped; boards holding it land on the furthest state
+    // that still exists rather than resetting to the start.
+    if (block.status === 'Installed') block.status = 'Arrived';
+    if (STATUSES.indexOf(block.status) === -1) block.status = DEFAULT_STATUS;
     refs.status.dataset.status = block.status;
     refs.status.textContent = block.status;
     refs.url.value = block.url || '';
@@ -835,6 +849,7 @@
     });
 
     dragBehaviour(el, block, refs);
+    resizeBehaviour(el, block, refs);
     bindPorts(el, block, refs);
 
     world.appendChild(el);
@@ -874,6 +889,61 @@
   function bringToFront(block, el) {
     block.z = ++state.seq;
     el.style.zIndex = block.z;
+  }
+
+  /* ------------------------------------------------------------- resizing */
+
+  var RESIZE_DIRS = ['n', 's', 'w', 'e', 'nw', 'ne', 'sw', 'se'];
+
+  function resizeBehaviour(el, block, refs) {
+    RESIZE_DIRS.forEach(function (dir) {
+      var grip = refs.grips[dir];
+
+      grip.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation(); // never let this become a card drag
+        bringToFront(block, el);
+        closeConfirm();
+
+        var startX = e.clientX;
+        var startY = e.clientY;
+        var o = { x: block.x, y: block.y, w: block.w, h: block.h };
+        try { grip.setPointerCapture(e.pointerId); } catch (err) { /* no capture */ }
+
+        function onMove(ev) {
+          var dx = (ev.clientX - startX) / state.view.s;
+          var dy = (ev.clientY - startY) / state.view.s;
+          var w = o.w, h = o.h, x = o.x, y = o.y;
+
+          if (dir.indexOf('e') > -1) w = clamp(o.w + dx, MIN_W, MAX_W);
+          if (dir.indexOf('s') > -1) h = clamp(o.h + dy, MIN_H, MAX_H);
+          // Dragging a top or left edge moves the block as well as sizing it,
+          // so the opposite edge stays put.
+          if (dir.indexOf('w') > -1) { w = clamp(o.w - dx, MIN_W, MAX_W); x = o.x + (o.w - w); }
+          if (dir.indexOf('n') > -1) { h = clamp(o.h - dy, MIN_H, MAX_H); y = o.y + (o.h - h); }
+
+          block.x = Math.round(x);
+          block.y = Math.round(y);
+          block.w = Math.round(w);
+          block.h = Math.round(h);
+          place(el, block);
+          renderWires(); // sockets move with the edges
+        }
+
+        function onUp(ev) {
+          try { grip.releasePointerCapture(ev.pointerId); } catch (err) { /* never captured */ }
+          grip.removeEventListener('pointermove', onMove);
+          grip.removeEventListener('pointerup', onUp);
+          grip.removeEventListener('pointercancel', onUp);
+          save();
+        }
+
+        grip.addEventListener('pointermove', onMove);
+        grip.addEventListener('pointerup', onUp);
+        grip.addEventListener('pointercancel', onUp);
+      });
+    });
   }
 
   /* -------------------------------------------------------------- dragging */
@@ -1271,7 +1341,7 @@
   var DEFAULT_TYPE = 'Part';
 
   // Where a part is in the process of actually getting onto the guitar.
-  var STATUSES = ['Wishlist', 'Ordered', 'Arrived', 'Installed'];
+  var STATUSES = ['Wishlist', 'Ordered', 'Arrived'];
   var DEFAULT_STATUS = 'Wishlist';
 
   /** Opens a list under `anchor`, marking the current value. */
