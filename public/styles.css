@@ -279,16 +279,78 @@ html, body {
   transform-origin: 0 0;
 }
 
+/* The container stays click-through so the canvas can still be panned from
+   the middle; only the controls inside take pointer events. */
 .empty-hint {
   position: absolute;
-  top: 42%; left: 50%;
+  top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   text-align: center;
   color: var(--ink-faint);
   pointer-events: none;
   margin: 0;
+  width: min(560px, calc(100% - 48px));
 }
-.empty-hint strong { color: var(--ink-dim); }
+.eh-lead { margin: 0 0 16px; font-size: 13.5px; }
+.eh-tip { margin: 16px 0 0; font-size: 12px; color: var(--ink-ghost); }
+.eh-link {
+  pointer-events: auto;
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-dim);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  transition: color .16s ease;
+}
+.eh-link:hover { color: var(--ink); }
+
+.tpl-grid {
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.tpl {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 12px 13px;
+  min-height: 74px;
+  justify-content: center;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .022);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+.tpl:hover { background: rgba(255, 255, 255, .06); border-color: var(--edge-hi); }
+.tpl-name { font-size: 13px; font-weight: 600; }
+.tpl-note {
+  font-size: 11.5px;
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An unfilled slot is visible but inert, so the grid keeps its shape. */
+.tpl.empty {
+  cursor: default;
+  border-style: dashed;
+  background: none;
+  opacity: .5;
+}
+.tpl.empty:hover { background: none; border-color: var(--edge); }
+.tpl.empty .tpl-name { color: var(--ink-faint); font-weight: 500; }
+
+@media (max-width: 620px) {
+  .tpl-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
 /* ---------- marquee ---------- */
 
@@ -1060,3 +1122,47 @@ html, body {
 @media (max-width: 560px) {
   .summary { width: auto; left: var(--frame); }
 }
+
+/* Status line beside the re-check / share actions. */
+.recheck-note {
+  font-size: 11px;
+  color: var(--ink-faint);
+  align-self: center;
+  margin-right: 4px;
+}
+.recheck-note.warn { color: var(--warn); }
+
+/* A part whose live price no longer matches what's on the card. */
+.sum-row-change {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--warn);
+  font-variant-numeric: tabular-nums;
+}
+.sum-row-dead { flex: 0 0 auto; font-size: 11px; color: var(--ink-ghost); }
+
+.sum-apply {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 6px 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(232, 165, 80, .38);
+  border-radius: 7px;
+  background: rgba(224, 150, 60, .1);
+  font-size: 12px;
+  color: var(--warn);
+}
+.sum-apply button {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--warn);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 5px;
+  transition: background-color .14s ease;
+}
+.sum-apply button:hover { background: rgba(224, 150, 60, .16); }

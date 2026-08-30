@@ -1,3 +1,15 @@
 name = "gcl"
 compatibility_date = "2025-06-01"
 pages_build_output_dir = "public"
+
+# Storage for share links. Before the first deploy, create the namespace and
+# paste its id here:
+#
+#   npx wrangler kv namespace create BOARDS
+#
+# `wrangler pages dev` simulates this locally, so the placeholder id below is
+# only a stand-in until a real one exists. Without a working binding the share
+# endpoint returns a clear "not set up" message rather than failing obscurely.
+[[kv_namespaces]]
+binding = "BOARDS"
+id = "gcl_boards_placeholder"

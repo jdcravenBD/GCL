@@ -530,7 +530,11 @@
   });
 
   function refreshEmptyHint() {
-    emptyHint.hidden = state.blocks.length > 0;
+    var empty = state.blocks.length === 0;
+    emptyHint.hidden = !empty;
+    // Rebuilt each time it reappears, so an edited templates.js shows up on
+    // reload without any extra wiring.
+    if (empty) renderTemplates();
   }
 
   /* --------------------------------------------------------------- images */
@@ -1075,7 +1079,7 @@
 
   // Right-click on bare canvas.
   stage.addEventListener('contextmenu', function (e) {
-    if (e.target !== stage && e.target !== world && e.target !== emptyHint) return;
+    if (e.target !== stage && e.target !== world && !emptyHint.contains(e.target)) return;
     e.preventDefault();
     closeConfirm();
 
@@ -1135,7 +1139,9 @@
 
   stage.addEventListener('pointerdown', function (e) {
     if (e.button !== 0 && e.button !== 1) return;
-    if (e.target !== stage && e.target !== world && e.target !== emptyHint) return;
+    // The empty-state block is click-through except for its own controls, and
+    // those stop the event before it gets here.
+    if (e.target !== stage && e.target !== world && !emptyHint.contains(e.target)) return;
 
     // Touching the background drops focus out of whatever field was being
     // typed in — a card's, or the board name in the header. preventDefault
@@ -1392,17 +1398,101 @@
   // the contextmenu event that follows reopens it in the new place.
   document.addEventListener('pointerdown', function (e) {
     // Let the popups' own controls handle their clicks.
-    if (confirmEl.contains(e.target) || pastePop.contains(e.target)) return;
+    if (confirmEl.contains(e.target) || pastePop.contains(e.target) ||
+        sharePop.contains(e.target)) return;
     if (!ctx.contains(e.target)) closeCtx();
     closeConfirm();
     closePaste();
   }, true);
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { closeCtx(); closeConfirm(); closePaste(); }
+    if (e.key === 'Escape') { closeCtx(); closeConfirm(); closePaste(); closeShare(); }
   });
   window.addEventListener('blur', function () {
     closeCtx(); closeConfirm(); closePaste();
+  });
+
+  /* ------------------------------------------------------------ templates */
+
+  /**
+   * Re-key a template's blocks so its ids can never collide with the board,
+   * rewriting the links to match. Templates are authored as plain Exports, so
+   * they arrive carrying whatever ids they were saved with.
+   */
+  function rekeyBoard(data, startSeq) {
+    var seq = startSeq || 1;
+    var remap = {};
+    var blocks = (data.blocks || []).map(function (b) {
+      var copy = JSON.parse(JSON.stringify(b));
+      var fresh = 'b' + seq++;
+      remap[b.id] = fresh;
+      copy.id = fresh;
+      return copy;
+    });
+    var links = (data.links || [])
+      .filter(function (l) { return remap[l.a.id] && remap[l.b.id]; })
+      .map(function (l) {
+        return {
+          a: { id: remap[l.a.id], side: l.a.side },
+          b: { id: remap[l.b.id], side: l.b.side }
+        };
+      });
+    return { blocks: blocks, links: links, seq: seq };
+  }
+
+  function applyTemplate(tpl) {
+    if (!tpl || !tpl.board) return;
+    var keyed = rekeyBoard(tpl.board, 1);
+    resetBoard({
+      // A name or budget the user already typed wins over the template's.
+      name: state.name || tpl.board.name || tpl.name,
+      budget: state.budget || tpl.board.budget || '',
+      blocks: keyed.blocks,
+      links: keyed.links,
+      view: tpl.board.view || { x: 60, y: 40, s: 1 },
+      seq: keyed.seq
+    });
+  }
+
+  function renderTemplates() {
+    var grid = document.getElementById('tpl-grid');
+    var list = window.GCL_TEMPLATES || [];
+    grid.innerHTML = '';
+
+    list.forEach(function (tpl) {
+      var filled = !!(tpl.board && (tpl.board.blocks || []).length);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tpl' + (filled ? '' : ' empty');
+      btn.disabled = !filled;
+
+      var name = document.createElement('span');
+      name.className = 'tpl-name';
+      name.textContent = tpl.name || 'Untitled';
+
+      var note = document.createElement('span');
+      note.className = 'tpl-note';
+      note.textContent = filled
+        ? (tpl.note || (tpl.board.blocks.length + ' parts'))
+        : (tpl.note || 'Empty');
+
+      btn.appendChild(name);
+      btn.appendChild(note);
+
+      if (filled) {
+        // Stop the press reaching the canvas, which would start a pan.
+        btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+        btn.addEventListener('click', function () { applyTemplate(tpl); });
+      }
+      grid.appendChild(btn);
+    });
+  }
+
+  document.getElementById('eh-blank').addEventListener('pointerdown', function (e) {
+    e.stopPropagation();
+  });
+  document.getElementById('eh-blank').addEventListener('click', function () {
+    createBlock();
   });
 
   /* --------------------------------------------------------- summary panel */
@@ -1499,6 +1589,34 @@
       return;
     }
 
+    // Anything a re-check found at a different price gets a banner, so the
+    // changes are actionable rather than just noted next to each row.
+    var moved = state.blocks.filter(checkedDiffers);
+    if (moved.length) {
+      var banner = document.createElement('div');
+      banner.className = 'sum-apply';
+      var msg = document.createElement('span');
+      msg.textContent = moved.length +
+        (moved.length === 1 ? ' price has changed' : ' prices have changed');
+      var applyAll = document.createElement('button');
+      applyAll.type = 'button';
+      applyAll.textContent = 'Apply all';
+      applyAll.addEventListener('click', function () {
+        moved.forEach(function (b) {
+          b.price = currencySymbol(b.check.currency) + b.check.price.toFixed(2);
+          delete b.check;
+          var entry = nodes.get(b.id);
+          if (entry) entry.refs.price.value = b.price;
+        });
+        recomputeTotal();
+        save();
+        renderSummary();
+      });
+      banner.appendChild(msg);
+      banner.appendChild(applyAll);
+      sumList.appendChild(banner);
+    }
+
     groups.forEach(function (g) {
       var wrap = document.createElement('div');
       wrap.className = 'sum-group';
@@ -1550,8 +1668,28 @@
 
         row.appendChild(label);
         row.appendChild(qty);
-        row.appendChild(price);
-        row.addEventListener('click', function () { focusBlock(b.id); });
+
+        // A changed price replaces the click-to-focus behaviour for that row
+        // with click-to-apply, which is what you actually want at that moment.
+        if (checkedDiffers(b)) {
+          var moved2 = document.createElement('span');
+          moved2.className = 'sum-row-change';
+          moved2.textContent = '→ ' + money(b.check.price);
+          row.appendChild(price);
+          row.appendChild(moved2);
+          row.title = 'Now ' + money(b.check.price) + ' — click to apply';
+          row.addEventListener('click', function () { applyCheckedPrice(b); });
+        } else {
+          if (b.check && b.check.status === 'unreachable') {
+            var dead = document.createElement('span');
+            dead.className = 'sum-row-dead';
+            dead.textContent = 'link?';
+            dead.title = 'That page could not be reached when last checked';
+            row.appendChild(dead);
+          }
+          row.appendChild(price);
+          row.addEventListener('click', function () { focusBlock(b.id); });
+        }
         wrap.appendChild(row);
       });
 
@@ -1690,6 +1828,179 @@
       }
     }
   });
+
+  /* -------------------------------------------------------- price re-check */
+
+  var recheckBtn = document.getElementById('recheck');
+  var recheckNote = document.getElementById('recheck-note');
+  var rechecking = false;
+
+  function checkedDiffers(b) {
+    return b.check && b.check.status === 'ok' &&
+      Math.abs(b.check.price - parseMoney(b.price)) >= 0.01;
+  }
+
+  function applyCheckedPrice(b) {
+    if (!b.check || b.check.status !== 'ok') return;
+    b.price = currencySymbol(b.check.currency) + b.check.price.toFixed(2);
+    delete b.check;
+    var entry = nodes.get(b.id);
+    if (entry) entry.refs.price.value = b.price;
+    recomputeTotal();
+    save();
+    renderSummary();
+  }
+
+  /** Re-fetch every part that has a URL and note what the price is now. */
+  async function recheckPrices() {
+    if (rechecking) return;
+    var targets = state.blocks.filter(function (b) {
+      return String(b.url || '').trim();
+    });
+    if (!targets.length) {
+      recheckNote.classList.remove('warn');
+      recheckNote.textContent = 'No product links';
+      return;
+    }
+
+    rechecking = true;
+    recheckBtn.disabled = true;
+    var done = 0;
+    var changed = 0;
+    var dead = 0;
+
+    var tick = function () {
+      recheckNote.classList.remove('warn');
+      recheckNote.textContent = done + ' / ' + targets.length;
+    };
+    tick();
+
+    var queue = targets.slice();
+    // Three at a time — quick, without firing a burst at one store at once.
+    async function worker() {
+      while (queue.length) {
+        var b = queue.shift();
+        try {
+          // cache:'reload' skips the 24h cache the scraper sets, which is the
+          // whole point of asking again.
+          var res = await fetch(
+            '/api/scrape?url=' + encodeURIComponent(b.url), { cache: 'reload' }
+          );
+          var data = await res.json();
+          if (!res.ok) {
+            b.check = { status: 'unreachable', at: Date.now() };
+            dead++;
+          } else if (data.price == null) {
+            b.check = { status: 'noprice', at: Date.now() };
+          } else {
+            b.check = {
+              status: 'ok', price: data.price,
+              currency: data.currency, at: Date.now()
+            };
+            if (checkedDiffers(b)) changed++;
+          }
+        } catch (e) {
+          b.check = { status: 'unreachable', at: Date.now() };
+          dead++;
+        }
+        done++;
+        tick();
+      }
+    }
+    await Promise.all([worker(), worker(), worker()]);
+
+    rechecking = false;
+    recheckBtn.disabled = false;
+
+    var bits = [];
+    if (changed) bits.push(changed + ' changed');
+    if (dead) bits.push(dead + ' unreachable');
+    recheckNote.textContent = bits.length ? bits.join(' · ') : 'All current';
+    recheckNote.classList.toggle('warn', bits.length > 0);
+
+    save();
+    renderSummary();
+  }
+
+  recheckBtn.addEventListener('click', recheckPrices);
+
+  /* ---------------------------------------------------------- share links */
+
+  var sharePop = document.getElementById('share-pop');
+  var shareUrlInput = document.getElementById('share-url');
+  var shareNote = document.getElementById('share-note');
+  var shareBtn = document.getElementById('share');
+
+  function closeShare() { sharePop.classList.remove('show'); }
+
+  async function createShareLink() {
+    shareBtn.disabled = true;
+    shareNote.classList.remove('warn');
+    shareNote.textContent = 'Uploading…';
+    try {
+      var res = await fetch('/api/share', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(state)
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data && data.error ? data.error : 'Upload failed');
+
+      var url = location.origin + location.pathname + '?b=' + data.id;
+      shareUrlInput.value = url;
+      shareNote.textContent = '';
+      placePopup(sharePop, shareBtn, false, false);
+      sharePop.classList.add('show');
+      shareUrlInput.select();
+    } catch (e) {
+      shareNote.classList.add('warn');
+      shareNote.textContent = String((e && e.message) || e).slice(0, 60);
+    }
+    shareBtn.disabled = false;
+  }
+
+  shareBtn.addEventListener('click', createShareLink);
+  document.getElementById('share-close').addEventListener('click', closeShare);
+  document.getElementById('share-copy').addEventListener('click', function () {
+    var btn = this;
+    var restore = function (text) {
+      btn.textContent = text;
+      setTimeout(function () { btn.textContent = 'Copy'; }, 1400);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(shareUrlInput.value).then(
+        function () { restore('Copied'); },
+        function () { shareUrlInput.select(); restore('Select + copy'); }
+      );
+    } else {
+      shareUrlInput.select();
+      restore('Select + copy');
+    }
+  });
+
+  /**
+   * A ?b= link loads that snapshot over the current board. It goes through the
+   * normal history, so Ctrl+Z gets the old board back if it wasn't wanted.
+   */
+  async function loadSharedBoard(id) {
+    try {
+      var res = await fetch('/api/share?id=' + encodeURIComponent(id));
+      var data = await res.json();
+      if (!res.ok) throw new Error(data && data.error ? data.error : 'Could not open that link');
+      var keyed = rekeyBoard(data, 1);
+      resetBoard({
+        name: data.name || '',
+        budget: data.budget || '',
+        blocks: keyed.blocks,
+        links: keyed.links,
+        view: data.view || { x: 60, y: 40, s: 1 },
+        seq: keyed.seq
+      });
+    } catch (e) {
+      console.warn('Shared board:', e);
+      alert(String((e && e.message) || e));
+    }
+  }
 
   /* ----------------------------------------------------------- part types */
 
@@ -1908,4 +2219,13 @@
   // Baseline for the history stack: the board as it was loaded.
   lastSnap = snapshot();
   refreshHistoryButtons();
+
+  // A ?b= share link opens after the baseline is set, so undo can back out of
+  // it. The parameter is stripped once used, or a reload would re-import over
+  // whatever you'd done since.
+  var sharedId = new URLSearchParams(location.search).get('b');
+  if (sharedId) {
+    history.replaceState(null, '', location.pathname);
+    loadSharedBoard(sharedId);
+  }
 })();

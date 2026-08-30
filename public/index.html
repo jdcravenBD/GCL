@@ -72,10 +72,11 @@
          cards, and sits behind them in stacking order. -->
     <svg id="wires"></svg>
   </div>
-  <p id="empty" class="empty-hint">
-    Click <strong>+ Add part</strong> to drop your first block.<br>
-    Drag the background to pan &middot; Scroll to zoom
-  </p>
+  <div id="empty" class="empty-hint">
+    <p class="eh-lead">Start from a template, or just <button type="button" id="eh-blank" class="eh-link">add a part</button>.</p>
+    <div class="tpl-grid" id="tpl-grid"></div>
+    <p class="eh-tip">Drag the background to pan &middot; Scroll to zoom</p>
+  </div>
 
   <!-- Ctrl/Shift-drag marquee. Visual only for now. -->
   <div id="marquee"></div>
@@ -106,6 +107,14 @@
   <div class="sum-list" id="sum-list"></div>
 
   <div class="sum-foot">
+    <span class="sum-k">Prices</span>
+    <div class="sum-exports">
+      <span class="recheck-note" id="recheck-note"></span>
+      <button type="button" class="link-btn" id="recheck">Re-check</button>
+    </div>
+  </div>
+
+  <div class="sum-foot">
     <span class="sum-k">Export list</span>
     <div class="sum-exports">
       <button type="button" class="link-btn" data-export="md">Markdown</button>
@@ -113,7 +122,22 @@
       <button type="button" class="link-btn" data-export="copy">Copy</button>
     </div>
   </div>
+
+  <div class="sum-foot">
+    <span class="sum-k">Share</span>
+    <div class="sum-exports">
+      <span class="recheck-note" id="share-note"></span>
+      <button type="button" class="link-btn" id="share">Create link</button>
+    </div>
+  </div>
 </aside>
+
+<!-- Share result: the link plus a copy action, same popup shell as the rest. -->
+<div id="share-pop" class="confirm paste-pop">
+  <input class="pp-input" id="share-url" type="text" readonly spellcheck="false">
+  <button type="button" class="link-btn" id="share-copy">Copy</button>
+  <button type="button" class="link-btn" id="share-close">Close</button>
+</div>
 
 <!-- Shared right-click menu, filled in per context when opened. -->
 <div id="ctx" class="ctx"></div>
@@ -219,6 +243,7 @@
   </article>
 </template>
 
+<script src="templates.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
