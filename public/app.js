@@ -18,7 +18,7 @@
   var totalEl = document.getElementById('total');
   var importFile = document.getElementById('import-file');
 
-  var state = { blocks: [], links: [], view: { x: 60, y: 40, s: 1 }, seq: 1 };
+  var state = { name: '', blocks: [], links: [], view: { x: 60, y: 40, s: 1 }, seq: 1 };
   var nodes = new Map(); // block.id -> { el, refs }
   var pending = null;    // connection being dragged, or null
 
@@ -30,6 +30,7 @@
       if (!raw) return;
       var data = JSON.parse(raw);
       if (data && Array.isArray(data.blocks)) {
+        state.name = typeof data.name === 'string' ? data.name : '';
         state.blocks = data.blocks;
         state.links = Array.isArray(data.links) ? data.links : [];
         state.view = data.view || state.view;
@@ -475,6 +476,9 @@
       open: el.querySelector('.open'),
       manual: el.querySelector('.manual'),
       del: el.querySelector('.del'),
+      confirm: el.querySelector('.confirm'),
+      confirmYes: el.querySelector('.confirm-yes'),
+      confirmNo: el.querySelector('.confirm-no'),
       ports: {
         l: el.querySelector('.port.pl'),
         r: el.querySelector('.port.pr'),
@@ -591,8 +595,18 @@
       save();
     });
 
+    // Delete asks first. The popup is toggled rather than opened, so a second
+    // click on Delete dismisses it.
     refs.del.addEventListener('click', function () {
+      var opening = !refs.confirm.classList.contains('show');
+      closeConfirms();
+      if (opening) refs.confirm.classList.add('show');
+    });
+    refs.confirmYes.addEventListener('click', function () {
       removeBlock(block.id);
+    });
+    refs.confirmNo.addEventListener('click', function () {
+      refs.confirm.classList.remove('show');
     });
 
     dragBehaviour(el, block, refs);
@@ -632,6 +646,13 @@
     save();
   }
 
+  /** Dismiss every open delete confirmation. */
+  function closeConfirms() {
+    nodes.forEach(function (n) {
+      n.refs.confirm.classList.remove('show');
+    });
+  }
+
   function bringToFront(block, el) {
     block.z = ++state.seq;
     el.style.zIndex = block.z;
@@ -646,11 +667,16 @@
       if (e.button !== 0) return;
       bringToFront(block, el);
 
+      // Returns above for buttons and fields, so this only fires on a genuine
+      // card drag — clicking Delete itself won't close its own popup.
       if (e.target.closest(NO_DRAG)) return;
+      closeConfirms();
 
       e.preventDefault();
       e.stopPropagation();
-      el.setPointerCapture(e.pointerId);
+      // Same caveat as the connector drag: capture is an optimisation, and a
+      // browser refusing it must not abort the drag.
+      try { el.setPointerCapture(e.pointerId); } catch (err) { /* no capture */ }
       el.classList.add('dragging');
 
       var startX = e.clientX;
@@ -665,7 +691,7 @@
       }
 
       function onUp(ev) {
-        el.releasePointerCapture(ev.pointerId);
+        try { el.releasePointerCapture(ev.pointerId); } catch (err) { /* never captured */ }
         el.classList.remove('dragging');
         el.removeEventListener('pointermove', onMove);
         el.removeEventListener('pointerup', onUp);
@@ -690,6 +716,7 @@
     // there. For the URL field this is also what triggers its image fetch.
     var active = document.activeElement;
     if (active && active.closest && active.closest('.card')) active.blur();
+    closeConfirms();
 
     e.preventDefault();
     stage.setPointerCapture(e.pointerId);
@@ -706,7 +733,7 @@
       applyView();
     }
     function onUp(ev) {
-      stage.releasePointerCapture(ev.pointerId);
+      try { stage.releasePointerCapture(ev.pointerId); } catch (err) { /* never captured */ }
       stage.classList.remove('panning');
       stage.removeEventListener('pointermove', onMove);
       stage.removeEventListener('pointerup', onUp);
@@ -748,13 +775,57 @@
     save();
   });
 
+  /* ---------------------------------------------------------- header size */
+
+  // The header wraps onto extra rows on a narrow window. Publishing its real
+  // height as --bar-h keeps the canvas tucked underneath instead of being
+  // covered by the overflow.
+  var barEl = document.querySelector('.bar');
+
+  function syncBarHeight() {
+    document.documentElement.style.setProperty(
+      '--bar-h', barEl.offsetHeight + 'px'
+    );
+  }
+
+  // Both: the observer catches content changes, the resize listener covers the
+  // ordinary window-resize case even where observer delivery is throttled.
+  if (window.ResizeObserver) new ResizeObserver(syncBarHeight).observe(barEl);
+  window.addEventListener('resize', syncBarHeight);
+  syncBarHeight();
+
+  /* ------------------------------------------------------------ board name */
+
+  var boardNameInput = document.getElementById('board-name');
+
+  boardNameInput.addEventListener('input', function () {
+    state.name = boardNameInput.value;
+    save();
+  });
+  boardNameInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      boardNameInput.blur();
+    }
+  });
+
+  /** Board name reduced to something safe to use as a filename. */
+  function exportFilename() {
+    var base = (state.name || '').trim()
+      .replace(/[\\/:*?"<>|]+/g, '')  // characters filesystems reject
+      .replace(/\s+/g, '-')
+      .replace(/^[.-]+|[.-]+$/g, '')
+      .slice(0, 60);
+    return (base || 'gcl-board') + '.json';
+  }
+
   document.getElementById('export').addEventListener('click', function () {
     var blob = new Blob([JSON.stringify(state, null, 2)], {
       type: 'application/json'
     });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'gcl-board.json';
+    a.download = exportFilename();
     a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
   });
@@ -779,12 +850,15 @@
   document.getElementById('clear').addEventListener('click', function () {
     if (!state.blocks.length) return;
     if (!confirm('Delete all ' + state.blocks.length + ' parts from this board?')) return;
-    resetBoard({ blocks: [], links: [], view: { x: 60, y: 40, s: 1 }, seq: 1 });
+    // Clearing empties the board but keeps what it's called.
+    resetBoard({ name: state.name, blocks: [], links: [], view: { x: 60, y: 40, s: 1 }, seq: 1 });
   });
 
   function resetBoard(data) {
     nodes.forEach(function (n) { n.el.remove(); });
     nodes.clear();
+    state.name = typeof data.name === 'string' ? data.name : '';
+    boardNameInput.value = state.name;
     state.blocks = data.blocks || [];
     state.links = Array.isArray(data.links) ? data.links : [];
     state.view = data.view || { x: 60, y: 40, s: 1 };
@@ -831,6 +905,7 @@
   setFont(savedFont, false);
 
   load();
+  boardNameInput.value = state.name || '';
   state.blocks.forEach(mountBlock);
   applyView();
   refreshEmptyHint();

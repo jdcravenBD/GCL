@@ -12,10 +12,17 @@
 <body>
 
 <header class="bar">
-  <div class="brand">
-    <span class="mark"></span>
-    <strong>GCL</strong>
-    <span class="sub">parts board</span>
+  <div class="bar-left">
+    <div class="brand">
+      <span class="mark"></span>
+      <strong>GCL</strong>
+      <span class="sub">Guitar Checklist</span>
+    </div>
+
+    <div class="board-name">
+      <span class="bn-label">Board name</span>
+      <input id="board-name" type="text" placeholder="Untitled board" spellcheck="false">
+    </div>
   </div>
 
   <div class="bar-actions">
@@ -92,13 +99,21 @@
         <input class="f-qty" type="text" inputmode="numeric" placeholder="1">
       </div>
 
-      <textarea class="f-notes" rows="2" placeholder="Notes (spec, finish, vendor…)"></textarea>
+      <textarea class="f-notes" rows="2" placeholder="Notes (type, finish, vendor, ect.)"></textarea>
     </div>
 
     <div class="card-tools">
       <a class="open" target="_blank" rel="noopener noreferrer" hidden>Open page &#8599;</a>
       <button class="link-btn manual">Paste image URL</button>
-      <button class="link-btn del">Delete</button>
+
+      <span class="del-wrap">
+        <button class="link-btn del">Delete</button>
+        <span class="confirm">
+          <span class="confirm-q">Are you sure?</span>
+          <button class="link-btn confirm-yes">Yes</button>
+          <button class="link-btn confirm-no">No</button>
+        </span>
+      </span>
     </div>
 
     <!-- One connector per side, centred on the edge. -->
