@@ -598,7 +598,7 @@
         url: '',
         title: '',
         price: '',
-        qty: '',
+        qty: '1',
         notes: '',
         images: [],
         imgIndex: 0
@@ -650,7 +650,10 @@
 
     refs.title.value = block.title || '';
     refs.price.value = block.price || '';
-    refs.qty.value = block.qty || '';
+    // Quantity is a real value, not a placeholder, so an existing board with a
+    // blank qty is brought up to the default on load.
+    if (!block.qty) block.qty = '1';
+    refs.qty.value = block.qty;
     refs.url.value = block.url || '';
     refs.notes.value = block.notes || '';
     if (block.url) {
@@ -971,14 +974,18 @@
     try { stage.setPointerCapture(e.pointerId); } catch (err) { /* no capture */ }
     stage.classList.add('panning');
 
-    var startX = e.clientX;
-    var startY = e.clientY;
-    var ox = state.view.x;
-    var oy = state.view.y;
+    // Panning is applied incrementally, from the previous pointer position
+    // rather than from where the drag began. Anchoring to the start point
+    // meant a wheel-zoom mid-drag — which moves view.x/y to keep the cursor
+    // pinned — was undone by the next pointermove, and the view lurched.
+    var lastX = e.clientX;
+    var lastY = e.clientY;
 
     function onMove(ev) {
-      state.view.x = ox + (ev.clientX - startX);
-      state.view.y = oy + (ev.clientY - startY);
+      state.view.x += ev.clientX - lastX;
+      state.view.y += ev.clientY - lastY;
+      lastX = ev.clientX;
+      lastY = ev.clientY;
       applyView();
     }
     function onUp(ev) {

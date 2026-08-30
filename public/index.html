@@ -108,10 +108,15 @@
           <small>Paste a product URL above</small>
         </div>
         <div class="thumb-status" hidden></div>
-        <!-- Glyph wrapped so it can be stretched without distorting the
-             button's square hover box. -->
-        <button class="nav prev" title="Previous image" hidden><span>&#8249;</span></button>
-        <button class="nav next" title="Next image" hidden><span>&#8250;</span></button>
+        <!-- Drawn rather than typed: a chevron character sits off-centre in its
+             em box, which threw the hover square off. The path is symmetric
+             about the middle of the viewBox, so the two line up exactly. -->
+        <button class="nav prev" aria-label="Previous image" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16.5 4.5 L7.5 12 L16.5 19.5"/></svg>
+        </button>
+        <button class="nav next" aria-label="Next image" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.5 L16.5 12 L7.5 19.5"/></svg>
+        </button>
         <div class="counter" hidden></div>
       </div>
 
@@ -130,7 +135,7 @@
         </span>
         <span class="f-label">Qty</span>
         <span class="fw fw-qty">
-          <input class="f-qty" type="text" inputmode="numeric" placeholder="1">
+          <input class="f-qty" type="text" inputmode="numeric">
         </span>
       </div>
 
