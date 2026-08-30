@@ -37,8 +37,8 @@
 
   /* Connectors: barely there until they matter. */
   --port: #232323;
-  --port-live: #d8d8d8;
-  --wire: #7d7d7d;
+  --port-live: #f4f4f4;
+  --wire: #cfcfcf;
 
   --radius: 10px;
   --thumb-radius: 8px;
@@ -154,8 +154,8 @@ html, body {
   transition: background-color .16s ease;
 }
 #board-name::placeholder { color: var(--ink-ghost); }
-#board-name:hover { background: rgba(255, 255, 255, .055); }
-#board-name:focus { outline: none; background: rgba(255, 255, 255, .085); }
+#board-name:hover { background: rgba(255, 255, 255, .034); }
+#board-name:focus { outline: none; background: rgba(255, 255, 255, .075); }
 
 .bar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .group { display: flex; gap: 4px; }
@@ -275,8 +275,12 @@ html, body {
   visibility: hidden;
   transform: translateY(-5px) scale(.98);
   transform-origin: top left;
-  transition: opacity .12s ease, transform .12s ease, visibility .12s;
+  transition: opacity .12s ease, transform .12s ease, visibility .12s,
+              filter .16s ease;
 }
+/* Recedes while a popup of its own is open, so the popup reads as the thing
+   being answered. The popup is a sibling, so it stays at full strength. */
+.ctx.dimmed { filter: brightness(.45); }
 .ctx.show {
   opacity: 1;
   visibility: visible;
@@ -457,7 +461,22 @@ html, body {
    up the slack, so the notes box can't get squeezed into a scrollbar. */
 .fields > .row,
 .fields > .msg,
-.fields > .f-notes { flex: 0 0 auto; }
+.fields > .fw-notes { flex: 0 0 auto; }
+
+/* The hover panel lives on the wrapper, never on the field. A mask applied to
+   the field would otherwise fade the right edge of its own highlight. */
+.fw {
+  display: flex;
+  min-width: 0;
+  border-radius: 3px;
+  transition: background-color .16s ease;
+}
+.fw:hover { background: rgba(255, 255, 255, .034); }
+.fw:focus-within { background: rgba(255, 255, 255, .075); }
+.fw-title { flex: 1 1 auto; }
+.fw-price { flex: 0 0 62px; }
+.fw-qty { flex: 0 0 38px; }
+.fw-notes { display: block; }
 
 /* Fields carry no chrome at rest — the text simply sits on the block. The
    transparent border keeps box metrics stable so nothing shifts when the
@@ -475,15 +494,36 @@ html, body {
   transition: background-color .16s ease;
 }
 
-/* A pale rounded panel fades up under the cursor to say "this is editable",
-   and stays up while the field is focused so the target doesn't vanish mid-
-   edit. White at low alpha reads as a neutral lift, so no hue is introduced. */
-.fields input:hover, .fields textarea:hover {
-  background: rgba(255, 255, 255, .055);
+.fields input:focus, .fields textarea:focus { outline: none; }
+
+/* Text that runs past the edge of its field tapers off rather than being cut
+   mid-character. Dropped on focus so the caret stays visible while editing. */
+/* Fade length is set per field: a ramp long enough to read on the wide Name
+   field would swallow the whole of Qty, which is only 38px across. */
+.f-title {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 46px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 46px), transparent);
 }
-.fields input:focus, .fields textarea:focus {
-  outline: none;
-  background: rgba(255, 255, 255, .085);
+.f-price {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 26px), transparent);
+}
+.f-qty {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 16px), transparent);
+}
+.f-title:focus, .f-price:focus, .f-qty:focus {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+/* The notes box wraps, so its overflow is vertical. */
+.f-notes {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent);
+}
+.f-notes:focus {
+  -webkit-mask-image: none;
+  mask-image: none;
 }
 
 /* Set just above the block in value so it recedes behind the value it names,
@@ -504,9 +544,8 @@ html, body {
 /* Indented by the notes field's own border + padding (1px + 5px) so "Name"
    starts on the same vertical as the notes placeholder below it. */
 .meta-row { gap: 5px; padding-left: 6px; }
-.f-title { flex: 1 1 auto; min-width: 0; font-weight: 600; }
-.f-price { flex: 0 0 62px; font-variant-numeric: tabular-nums; }
-.f-qty { flex: 0 0 38px; font-variant-numeric: tabular-nums; }
+.f-title { font-weight: 600; }
+.f-price, .f-qty { font-variant-numeric: tabular-nums; }
 
 /* The URL keeps hyperlink blue — the one deliberate hue in the interface,
    because a link that isn't blue doesn't read as a link. The selector has to
@@ -537,8 +576,8 @@ html, body {
   border-radius: 3px;
   transition: background-color .16s ease;
 }
-.url-row:hover { background: rgba(255, 255, 255, .055); }
-.url-row:focus-within { background: rgba(255, 255, 255, .085); }
+.url-row:hover { background: rgba(255, 255, 255, .034); }
+.url-row:focus-within { background: rgba(255, 255, 255, .075); }
 
 /* No hue available, so success and failure separate by weight and brightness:
    a problem reads bright against a lighter well, a confirmation stays quiet. */
@@ -624,6 +663,25 @@ html, body {
   transform: translateY(0);
 }
 .confirm-q { color: var(--ink-dim); padding-right: 2px; }
+
+/* Image-URL prompt: same shell as the confirmation, with a field in it. */
+.paste-pop { padding: 4px 5px; }
+.paste-pop .pp-input {
+  width: 240px;
+  background: rgba(255, 255, 255, .055);
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 5px 7px;
+  outline: none;
+  transition: border-color .14s ease;
+}
+.paste-pop .pp-input::placeholder { color: var(--ink-ghost); }
+.paste-pop .pp-input:focus { border-color: var(--edge-hi); }
+.paste-pop .pp-input.bad { border-color: var(--warn); }
+.paste-pop .pp-add:hover { color: #fff; }
 /* No longer inside .card-tools, so it needs its own hit padding. */
 .confirm .link-btn { padding: 6px 6px; line-height: 1; }
 .confirm .confirm-yes:hover { color: #fff; }

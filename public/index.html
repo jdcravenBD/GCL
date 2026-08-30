@@ -80,6 +80,13 @@
   <button type="button" class="link-btn confirm-no">No</button>
 </div>
 
+<!-- Same popup treatment, but asking for an image URL. -->
+<div id="paste-pop" class="confirm paste-pop">
+  <input class="pp-input" type="url" placeholder="Paste image address" spellcheck="false">
+  <button type="button" class="link-btn pp-add">Add</button>
+  <button type="button" class="link-btn pp-cancel">Cancel</button>
+</div>
+
 <input type="file" id="import-file" accept="application/json" hidden>
 
 <!-- Card template, cloned for each part -->
@@ -87,8 +94,7 @@
   <article class="card">
     <div class="fields">
       <div class="row url-row">
-        <input class="f-url" type="url" placeholder="Product URL" spellcheck="false"
-               title="Images load when you click away from this field">
+        <input class="f-url" type="url" placeholder="Product URL" spellcheck="false">
       </div>
 
       <div class="thumb">
@@ -105,16 +111,26 @@
 
       <div class="msg" hidden></div>
 
+      <!-- Each field sits in a wrapper that carries the hover panel, so the
+           field itself can be masked without fading that panel's edge. -->
       <div class="row meta-row">
         <span class="f-label">Name</span>
-        <input class="f-title" type="text" spellcheck="false">
+        <span class="fw fw-title">
+          <input class="f-title" type="text" spellcheck="false">
+        </span>
         <span class="f-label">Price</span>
-        <input class="f-price" type="text" inputmode="decimal" placeholder="0.00">
+        <span class="fw fw-price">
+          <input class="f-price" type="text" inputmode="decimal" placeholder="0.00">
+        </span>
         <span class="f-label">Qty</span>
-        <input class="f-qty" type="text" inputmode="numeric" placeholder="1">
+        <span class="fw fw-qty">
+          <input class="f-qty" type="text" inputmode="numeric" placeholder="1">
+        </span>
       </div>
 
-      <textarea class="f-notes" rows="2" placeholder="Notes (type, finish, vendor, ect.)"></textarea>
+      <span class="fw fw-notes">
+        <textarea class="f-notes" rows="2" placeholder="Notes (type, finish, vendor, ect.)"></textarea>
+      </span>
     </div>
 
     <div class="card-tools">

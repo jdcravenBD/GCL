@@ -144,6 +144,53 @@
     return { id: card.dataset.id, side: el.dataset.side };
   }
 
+  // How far outside a block a wire can be released and still land on it.
+  var SNAP = 70;
+
+  /**
+   * Where a wire released at this point should connect. An exact hit on a dot
+   * wins; otherwise it falls back to the nearest block within reach and picks
+   * that block's nearest free side, so dropping anywhere along an edge works.
+   * `fromId` is excluded so a block can't wire to itself.
+   */
+  function portTargetAt(clientX, clientY, fromId) {
+    var exact = portUnder(clientX, clientY);
+    if (exact) {
+      if (exact.id === fromId || linkIndexAt(exact.id, exact.side) >= 0) return null;
+      return exact;
+    }
+
+    var p = toWorld(clientX, clientY);
+    var best = null;
+    var bestDist = Infinity;
+
+    state.blocks.forEach(function (b) {
+      if (b.id === fromId) return;
+      // Distance from the point to the block's rectangle; 0 when inside it.
+      var dx = Math.max(b.x - p.x, 0, p.x - (b.x + b.w));
+      var dy = Math.max(b.y - p.y, 0, p.y - (b.y + b.h));
+      var d = Math.sqrt(dx * dx + dy * dy);
+      if (d < bestDist) { bestDist = d; best = b; }
+    });
+
+    if (!best || bestDist > SNAP) return null;
+
+    var sides = [
+      { side: 'l', d: Math.abs(p.x - best.x) },
+      { side: 'r', d: Math.abs(p.x - (best.x + best.w)) },
+      { side: 't', d: Math.abs(p.y - best.y) },
+      { side: 'b', d: Math.abs(p.y - (best.y + best.h)) }
+    ].sort(function (a, b) { return a.d - b.d; });
+
+    // Nearest side first, but fall through to the next if it's already taken.
+    for (var i = 0; i < sides.length; i++) {
+      if (linkIndexAt(best.id, sides[i].side) < 0) {
+        return { id: best.id, side: sides[i].side };
+      }
+    }
+    return null;
+  }
+
   /** Cubic bezier that leaves both ends along their outward normals. */
   function wirePath(p1, n1, p2, n2) {
     var dx = p2.x - p1.x;
@@ -251,10 +298,9 @@
 
         function onMove(ev) {
           pending.cursor = toWorld(ev.clientX, ev.clientY);
-          var t = portUnder(ev.clientX, ev.clientY);
-          // Only highlight somewhere the wire could actually land.
-          pending.target =
-            t && t.id !== pending.id && linkIndexAt(t.id, t.side) < 0 ? t : null;
+          // portTargetAt already rules out taken sockets and self-links, so
+          // whatever comes back is somewhere the wire can actually land.
+          pending.target = portTargetAt(ev.clientX, ev.clientY, pending.id);
           renderWires();
         }
 
@@ -264,8 +310,8 @@
           dot.removeEventListener('pointerup', onUp);
           dot.removeEventListener('pointercancel', onUp);
 
-          var t = portUnder(ev.clientX, ev.clientY);
-          var landed = t && t.id !== pending.id && linkIndexAt(t.id, t.side) < 0;
+          var t = portTargetAt(ev.clientX, ev.clientY, pending.id);
+          var landed = !!t;
           if (landed) {
             state.links.push({
               a: { id: pending.id, side: pending.side },
@@ -602,18 +648,16 @@
     bindField(refs.price, block, 'price', recomputeTotal);
     bindField(refs.qty, block, 'qty', recomputeTotal);
 
-    refs.manual.addEventListener('click', function () {
-      var entered = window.prompt('Image URL (right-click the photo on the store page → Copy image address):');
-      if (!entered) return;
-      entered = entered.trim();
-      if (!/^https?:\/\//i.test(entered)) {
-        setMsg(refs, 'That is not a valid image URL.', 'err');
-        return;
-      }
-      block.images = (block.images || []).concat([entered]);
+    function addImage(url) {
+      block.images = (block.images || []).concat([url]);
       block.imgIndex = block.images.length - 1;
       showImage(block, refs);
       save();
+    }
+    refs.addImage = addImage;
+
+    refs.manual.addEventListener('click', function () {
+      askPasteUrl(refs.manual, addImage);
     });
 
     // Delete asks first, via the shared popup anchored under this button.
@@ -632,8 +676,7 @@
 
       var items = [
         { label: 'Duplicate', run: function () { duplicateBlock(block); } },
-        { label: 'Bring to front', run: function () { bringToFront(block, el); save(); } },
-        { label: 'Paste image URL…', run: function () { refs.manual.click(); } }
+        { label: 'Paste image URL…', prompt: true, run: refs.addImage }
       ];
       if (block.url) {
         items.push({
@@ -643,7 +686,7 @@
       }
       if ((block.images || []).length) {
         items.push({
-          label: 'Clear images',
+          label: 'Clear image',
           run: function () {
             block.images = [];
             block.imgIndex = 0;
@@ -819,10 +862,13 @@
     if (e.target !== stage && e.target !== world && e.target !== emptyHint) return;
 
     // Touching the background drops focus out of whatever field was being
-    // typed in. preventDefault below would otherwise keep the caret blinking
-    // there. For the URL field this is also what triggers its image fetch.
+    // typed in — a card's, or the board name in the header. preventDefault
+    // below would otherwise keep the caret blinking there. For the URL field
+    // this is also what triggers its image fetch.
     var active = document.activeElement;
-    if (active && active.closest && active.closest('.card')) active.blur();
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')) {
+      active.blur();
+    }
     closeConfirm();
     closeCtx();
 
@@ -890,31 +936,62 @@
   /* ---------------------------------------------------------- confirmation */
 
   var confirmEl = document.getElementById('confirm');
+  var pastePop = document.getElementById('paste-pop');
+  var pasteInput = pastePop.querySelector('.pp-input');
   var confirmAction = null;
+  var pasteAction = null;
+
+  /**
+   * Position a popup against `anchor`. With `overlap` it is raised by a third
+   * of its height so its top sits over the anchor — used from the context
+   * menu, where it should read as belonging to the row it came from.
+   */
+  function placePopup(el, anchor, overlap) {
+    // visibility:hidden still lays out, so it measures before being shown.
+    el.style.left = '0px';
+    el.style.top = '0px';
+    var w = el.offsetWidth;
+    var h = el.offsetHeight;
+
+    var r = anchor.getBoundingClientRect();
+    var left = Math.min(r.right - w, window.innerWidth - w - 8);
+    var top = overlap ? r.bottom - Math.round(h / 3) : r.bottom + 5;
+    if (top + h > window.innerHeight - 8) top = r.top - h - 5; // flip above
+
+    el.style.left = Math.max(8, left) + 'px';
+    el.style.top = Math.max(8, top) + 'px';
+  }
 
   function closeConfirm() {
     confirmEl.classList.remove('show');
     confirmAction = null;
+    undimCtx();
   }
 
-  /** Drop the shared "Are you sure?" beneath `anchor`, running `onYes` if taken. */
-  function askConfirm(anchor, onYes) {
+  function closePaste() {
+    pastePop.classList.remove('show');
+    pasteInput.classList.remove('bad');
+    pasteAction = null;
+    undimCtx();
+  }
+
+  /** Drop the shared "Are you sure?" against `anchor`, running `onYes` if taken. */
+  function askConfirm(anchor, onYes, overlap) {
+    closePaste();
     confirmAction = onYes;
-
-    // visibility:hidden still lays out, so it measures before being shown.
-    confirmEl.style.left = '0px';
-    confirmEl.style.top = '0px';
-    var w = confirmEl.offsetWidth;
-    var h = confirmEl.offsetHeight;
-
-    var r = anchor.getBoundingClientRect();
-    var left = Math.min(r.right - w, window.innerWidth - w - 8);
-    var top = r.bottom + 5;
-    if (top + h > window.innerHeight - 8) top = r.top - h - 5; // flip above
-
-    confirmEl.style.left = Math.max(8, left) + 'px';
-    confirmEl.style.top = Math.max(8, top) + 'px';
+    placePopup(confirmEl, anchor, overlap);
     confirmEl.classList.add('show');
+  }
+
+  /** Ask for an image address, handing the trimmed URL to `onSubmit`. */
+  function askPasteUrl(anchor, onSubmit, overlap) {
+    closeConfirm();
+    pasteAction = onSubmit;
+    pasteInput.value = '';
+    pasteInput.classList.remove('bad');
+    placePopup(pastePop, anchor, overlap);
+    pastePop.classList.add('show');
+    setTimeout(function () { pasteInput.focus(); }, 20);
   }
 
   confirmEl.querySelector('.confirm-yes').addEventListener('click', function () {
@@ -925,11 +1002,39 @@
   });
   confirmEl.querySelector('.confirm-no').addEventListener('click', closeConfirm);
 
+  function submitPaste() {
+    var value = pasteInput.value.trim();
+    if (!/^https?:\/\/\S+$/i.test(value)) {
+      pasteInput.classList.add('bad');
+      pasteInput.focus();
+      return;
+    }
+    var run = pasteAction;
+    closePaste();
+    closeCtx();
+    if (run) run(value);
+  }
+
+  pastePop.querySelector('.pp-add').addEventListener('click', submitPaste);
+  pastePop.querySelector('.pp-cancel').addEventListener('click', closePaste);
+  pasteInput.addEventListener('input', function () {
+    pasteInput.classList.remove('bad');
+  });
+  pasteInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); submitPaste(); }
+    if (e.key === 'Escape') { e.preventDefault(); closePaste(); closeCtx(); }
+  });
+
   /* --------------------------------------------------------- context menu */
 
   var ctx = document.getElementById('ctx');
 
-  function closeCtx() { ctx.classList.remove('show'); }
+  function closeCtx() {
+    ctx.classList.remove('show');
+    ctx.classList.remove('dimmed');
+  }
+  function dimCtx() { ctx.classList.add('dimmed'); }
+  function undimCtx() { ctx.classList.remove('dimmed'); }
 
   /**
    * items: array of { label, run, danger } or the string '-' for a separator.
@@ -949,9 +1054,17 @@
       b.textContent = item.label;
       if (item.danger) b.className = 'danger';
       b.addEventListener('click', function () {
+        // The menu stays open behind these, dimmed, with the popup straddling
+        // the row so the two read as one control. Dim *after* opening: each
+        // opener closes the other popup first, and closing undims.
         if (item.confirm) {
-          // Menu stays open so the confirmation reads as dropping from the row.
-          askConfirm(b, item.run);
+          askConfirm(b, item.run, true);
+          dimCtx();
+          return;
+        }
+        if (item.prompt) {
+          askPasteUrl(b, item.run, true);
+          dimCtx();
           return;
         }
         closeCtx();
@@ -973,15 +1086,19 @@
   // Any press outside the menu dismisses it. Right-clicks land here first and
   // the contextmenu event that follows reopens it in the new place.
   document.addEventListener('pointerdown', function (e) {
-    if (confirmEl.contains(e.target)) return; // let Yes/No handle their click
+    // Let the popups' own controls handle their clicks.
+    if (confirmEl.contains(e.target) || pastePop.contains(e.target)) return;
     if (!ctx.contains(e.target)) closeCtx();
     closeConfirm();
+    closePaste();
   }, true);
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { closeCtx(); closeConfirm(); }
+    if (e.key === 'Escape') { closeCtx(); closeConfirm(); closePaste(); }
   });
-  window.addEventListener('blur', function () { closeCtx(); closeConfirm(); });
+  window.addEventListener('blur', function () {
+    closeCtx(); closeConfirm(); closePaste();
+  });
 
   function duplicateBlock(block) {
     var copy = JSON.parse(JSON.stringify(block));
