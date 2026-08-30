@@ -204,6 +204,53 @@ html, body {
 }
 #total { font-size: 15px; font-variant-numeric: tabular-nums; color: var(--bright); }
 
+/* Budget shares the total's block: the figure you've spent, the target you set,
+   and a hairline gauge under the pair. */
+.total-line { display: flex; align-items: baseline; gap: 6px; }
+.total-of { font-size: 11px; color: var(--ink-faint); }
+#budget {
+  width: 74px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding: 1px 4px;
+  transition: background-color .16s ease, color .16s ease;
+}
+#budget::placeholder { color: var(--ink-ghost); font-weight: 400; font-size: 11px; }
+#budget:hover { background: rgba(255, 255, 255, .034); }
+#budget:focus { outline: none; background: rgba(255, 255, 255, .075); color: var(--ink); }
+
+/* The gauge only exists once a target does. */
+.budget-bar {
+  display: none;
+  width: 100%;
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, .09);
+  overflow: hidden;
+}
+.total.has-budget .budget-bar { display: block; }
+.budget-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 2px;
+  background: var(--ink-dim);
+  transition: width .25s ease, background-color .2s ease;
+}
+/* Over budget reuses the warning orange already established for failures. */
+.total.over #total,
+.total.over #sum-left { color: var(--warn); }
+.total.over .budget-fill { background: var(--warn); }
+#sum-left-stat.over .sum-v { color: var(--warn); }
+
 /* ---------- canvas ---------- */
 
 /* A plus mark at every grid intersection, tiled. The background-position and

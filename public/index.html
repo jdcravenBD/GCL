@@ -38,7 +38,13 @@
     </div>
     <div class="total" title="Sum of all part prices">
       <span class="total-label">Build total</span>
-      <span id="total">$0.00</span>
+      <span class="total-line">
+        <span id="total">$0.00</span>
+        <span class="total-of">of</span>
+        <input id="budget" type="text" inputmode="decimal" placeholder="budget"
+               aria-label="Budget" spellcheck="false">
+      </span>
+      <span class="budget-bar"><span class="budget-fill" id="budget-fill"></span></span>
     </div>
     <button id="summary-toggle" class="btn">Summary</button>
     <div class="group">
@@ -86,6 +92,9 @@
     <div class="sum-stat"><span class="sum-k">Parts</span><span class="sum-v" id="sum-parts">0</span></div>
     <div class="sum-stat"><span class="sum-k">Items</span><span class="sum-v" id="sum-items">0</span></div>
     <div class="sum-stat"><span class="sum-k">Total</span><span class="sum-v" id="sum-total">$0.00</span></div>
+    <div class="sum-stat" id="sum-left-stat" hidden>
+      <span class="sum-k" id="sum-left-k">Left</span><span class="sum-v" id="sum-left">—</span>
+    </div>
   </div>
 
   <div class="seg" id="sum-group">

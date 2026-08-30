@@ -24,8 +24,14 @@
   var importFile = document.getElementById('import-file');
   var undoBtn = document.getElementById('undo');
   var redoBtn = document.getElementById('redo');
+  var totalWrap = document.querySelector('.total');
+  var budgetInput = document.getElementById('budget');
+  var budgetFill = document.getElementById('budget-fill');
 
-  var state = { name: '', blocks: [], links: [], view: { x: 60, y: 40, s: 1 }, seq: 1 };
+  var state = {
+    name: '', budget: '', blocks: [], links: [],
+    view: { x: 60, y: 40, s: 1 }, seq: 1
+  };
   var nodes = new Map(); // block.id -> { el, refs }
   var pending = null;    // connection being dragged, or null
 
@@ -38,6 +44,7 @@
       var data = JSON.parse(raw);
       if (data && Array.isArray(data.blocks)) {
         state.name = typeof data.name === 'string' ? data.name : '';
+        state.budget = typeof data.budget === 'string' ? data.budget : '';
         state.blocks = data.blocks;
         state.links = Array.isArray(data.links) ? data.links : [];
         state.view = data.view || state.view;
@@ -80,6 +87,7 @@
   function snapshot() {
     return JSON.stringify({
       name: state.name,
+      budget: state.budget,
       blocks: state.blocks,
       links: state.links,
       seq: state.seq
@@ -114,10 +122,12 @@
     nodes.forEach(function (n) { n.el.remove(); });
     nodes.clear();
     state.name = d.name;
+    state.budget = d.budget || '';
     state.blocks = d.blocks;
     state.links = d.links;
     state.seq = d.seq;
     boardNameInput.value = state.name || '';
+    budgetInput.value = state.budget || '';
     state.blocks.forEach(mountBlock);
     refreshEmptyHint();
     recomputeTotal();
@@ -444,15 +454,80 @@
     return isFinite(n) && n > 0 ? n : 1;
   }
 
-  function recomputeTotal() {
+  function boardTotal() {
     var sum = 0;
     for (var i = 0; i < state.blocks.length; i++) {
       var b = state.blocks[i];
       sum += parseMoney(b.price) * parseQty(b.qty);
     }
-    totalEl.textContent =
-      '$' + sum.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return sum;
   }
+
+  function recomputeTotal() {
+    var sum = boardTotal();
+    totalEl.textContent = money(sum);
+
+    var budget = parseMoney(state.budget);
+    var hasBudget = budget > 0;
+    var over = hasBudget && sum > budget;
+
+    totalWrap.classList.toggle('has-budget', hasBudget);
+    totalWrap.classList.toggle('over', over);
+
+    if (hasBudget) {
+      budgetFill.style.width = (Math.min(1, sum / budget) * 100).toFixed(1) + '%';
+      totalWrap.title = over
+        ? money(sum - budget) + ' over budget'
+        : money(budget - sum) + ' left of ' + money(budget);
+    } else {
+      budgetFill.style.width = '0%';
+      totalWrap.title = 'Sum of all part prices';
+    }
+    if (summaryOpen) renderBudgetStat(sum, budget);
+  }
+
+  /** Mirrors the header gauge as a figure in the summary panel. */
+  function renderBudgetStat(sum, budget) {
+    var stat = document.getElementById('sum-left-stat');
+    if (!(budget > 0)) {
+      stat.hidden = true;
+      return;
+    }
+    var over = sum > budget;
+    stat.hidden = false;
+    stat.classList.toggle('over', over);
+    document.getElementById('sum-left-k').textContent = over ? 'Over' : 'Left';
+    document.getElementById('sum-left').textContent =
+      money(Math.abs(budget - sum));
+  }
+
+  /* --------------------------------------------------------------- budget */
+
+  function commitBudget() {
+    var raw = budgetInput.value.trim();
+    if (!raw) {
+      state.budget = '';
+      budgetInput.value = '';
+    } else if (!/\d/.test(raw)) {
+      // Not a number at all — put back whatever was there rather than clearing.
+      budgetInput.value = state.budget || '';
+      return;
+    } else {
+      state.budget = money(parseMoney(raw));
+      budgetInput.value = state.budget;
+    }
+    recomputeTotal();
+    save();
+  }
+
+  budgetInput.addEventListener('blur', commitBudget);
+  budgetInput.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitBudget();
+      budgetInput.blur();
+    }
+  });
 
   function refreshEmptyHint() {
     emptyHint.hidden = state.blocks.length > 0;
@@ -1413,6 +1488,7 @@
     document.getElementById('sum-parts').textContent = state.blocks.length;
     document.getElementById('sum-items').textContent = units;
     document.getElementById('sum-total').textContent = money(total);
+    renderBudgetStat(total, parseMoney(state.budget));
 
     sumList.innerHTML = '';
     if (!state.blocks.length) {
@@ -1684,7 +1760,7 @@
   /** Empties the board but keeps its name. Callers ask for confirmation. */
   function clearBoard() {
     resetBoard({
-      name: state.name, blocks: [], links: [],
+      name: state.name, budget: state.budget, blocks: [], links: [],
       view: { x: 60, y: 40, s: 1 }, seq: 1
     });
   }
@@ -1773,6 +1849,8 @@
     nodes.clear();
     state.name = typeof data.name === 'string' ? data.name : '';
     boardNameInput.value = state.name;
+    state.budget = typeof data.budget === 'string' ? data.budget : '';
+    budgetInput.value = state.budget;
     state.blocks = data.blocks || [];
     state.links = Array.isArray(data.links) ? data.links : [];
     state.view = data.view || { x: 60, y: 40, s: 1 };
@@ -1820,6 +1898,7 @@
 
   load();
   boardNameInput.value = state.name || '';
+  budgetInput.value = state.budget || '';
   state.blocks.forEach(mountBlock);
   applyView();
   refreshEmptyHint();
