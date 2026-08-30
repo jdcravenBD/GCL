@@ -128,6 +128,65 @@ function stemTokens(rawUrl) {
   return out;
 }
 
+/**
+ * Turn whatever a store writes into a number. Prices arrive as "1,299.00",
+ * "1.299,00", "US $1,299", "1299" — the last separator with two or fewer
+ * digits after it is the decimal point, everything else is grouping.
+ */
+function normalizePrice(raw) {
+  if (raw == null) return null;
+  const s = String(raw).trim().replace(/[^\d.,]/g, '');
+  if (!s) return null;
+
+  const dec = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
+  let intPart = s;
+  let fracPart = '';
+  if (dec > -1 && dec !== s.length - 1 && s.length - dec - 1 <= 2) {
+    intPart = s.slice(0, dec);
+    fracPart = s.slice(dec + 1);
+  }
+  intPart = intPart.replace(/[.,]/g, '');
+
+  const n = parseFloat(intPart + (fracPart ? '.' + fracPart : ''));
+  return isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Walk arbitrary JSON-LD looking for schema.org offers. */
+function harvestOffers(node, out, depth) {
+  depth = depth || 0;
+  if (!node || depth > 8) return;
+  if (Array.isArray(node)) {
+    for (const n of node) harvestOffers(n, out, depth + 1);
+    return;
+  }
+  if (typeof node !== 'object') return;
+
+  if (node.offers) {
+    const offers = Array.isArray(node.offers) ? node.offers : [node.offers];
+    for (const o of offers) {
+      if (!o || typeof o !== 'object') continue;
+      const spec = o.priceSpecification && typeof o.priceSpecification === 'object'
+        ? o.priceSpecification
+        : null;
+      // lowPrice covers AggregateOffer, where a range is given instead.
+      const raw = o.price != null ? o.price
+        : spec && spec.price != null ? spec.price
+        : o.lowPrice;
+      const value = normalizePrice(raw);
+      if (value != null) {
+        out.push({
+          value: value,
+          currency: o.priceCurrency || (spec && spec.priceCurrency) || null
+        });
+      }
+    }
+  }
+  for (const k of Object.keys(node)) {
+    if (k === 'offers') continue;
+    harvestOffers(node[k], out, depth + 1);
+  }
+}
+
 /** Walk arbitrary JSON-LD looking for schema.org Product image fields. */
 function harvestJsonLd(node, out, depth) {
   depth = depth || 0;
@@ -231,6 +290,8 @@ export async function onRequestGet(context) {
   const ldChunks = [];
   let title = '';
   let ogTitle = null;
+  let metaPrice = null;
+  let metaCurrency = null;
 
   const push = (raw, score) => {
     const abs = absolutize(raw, base);
@@ -240,7 +301,12 @@ export async function onRequestGet(context) {
   const rewriter = new HTMLRewriter()
     .on('meta', {
       element(el) {
-        const key = (el.getAttribute('property') || el.getAttribute('name') || '').toLowerCase();
+        const key = (
+          el.getAttribute('property') ||
+          el.getAttribute('name') ||
+          el.getAttribute('itemprop') ||
+          ''
+        ).toLowerCase();
         const content = el.getAttribute('content');
         if (!content) return;
         if (key === 'og:image' || key === 'og:image:secure_url' || key === 'og:image:url') {
@@ -249,6 +315,15 @@ export async function onRequestGet(context) {
           push(content, 85);
         } else if (key === 'og:title') {
           ogTitle = content;
+        } else if (
+          key === 'product:price:amount' || key === 'og:price:amount' || key === 'price'
+        ) {
+          if (metaPrice == null) metaPrice = normalizePrice(content);
+        } else if (
+          key === 'product:price:currency' || key === 'og:price:currency' ||
+          key === 'pricecurrency'
+        ) {
+          if (!metaCurrency) metaCurrency = content.trim().toUpperCase();
         }
       }
     })
@@ -320,17 +395,35 @@ export async function onRequestGet(context) {
     }, 500);
   }
 
+  const offers = [];
   for (const chunk of ldChunks) {
     const text = chunk.trim();
     if (!text) continue;
     try {
+      const parsed = JSON.parse(text);
       const found = [];
-      harvestJsonLd(JSON.parse(text), found);
+      harvestJsonLd(parsed, found);
       for (const f of found) push(f.url, f.score);
+      harvestOffers(parsed, offers);
     } catch {
       // Malformed JSON-LD is common in the wild. Skip it quietly.
     }
   }
+
+  // Structured offers are the most trustworthy; meta tags are the fallback.
+  // Where a page lists several, the lowest is the single-unit price far more
+  // often than not — bundles and multipacks sit above it.
+  let price = null;
+  let currency = null;
+  if (offers.length) {
+    offers.sort((a, b) => a.value - b.value);
+    price = offers[0].value;
+    currency = offers[0].currency;
+  } else if (metaPrice != null) {
+    price = metaPrice;
+    currency = metaCurrency;
+  }
+  if (!currency && metaCurrency) currency = metaCurrency;
 
   // ---- rank, filter, dedupe ----------------------------------------------
 
@@ -384,7 +477,9 @@ export async function onRequestGet(context) {
     pageUrl: res.url,
     title: cleanTitle,
     images: images,
-    count: images.length
+    count: images.length,
+    price: price,
+    currency: currency
   });
 }
 

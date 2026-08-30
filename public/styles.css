@@ -302,6 +302,17 @@ html, body {
   transition: background-color .12s ease, color .12s ease;
 }
 .ctx button:hover { background: rgba(255, 255, 255, .07); color: var(--ink); }
+/* Picker menus get a marker column showing the current value. Scoped to
+   .picker so ordinary command menus aren't indented by the empty slot. */
+.ctx.picker button::before {
+  content: '';
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex: 0 0 auto;
+}
+.ctx.picker button.on { color: var(--ink); font-weight: 600; }
+.ctx.picker button.on::before { background: currentColor; }
 .ctx button.danger:hover { color: #fff; }
 .ctx .sep { height: 1px; background: var(--edge); margin: 4px 3px; }
 
@@ -449,6 +460,34 @@ html, body {
 .nav.prev { left: 5px; }
 .nav.next { right: 5px; }
 
+/* Sits opposite the counter, on the same dark capsule so it stays readable
+   over a white studio shot or a black one alike. With no hue available the
+   four states separate by weight and brightness, ending in a filled chip. */
+.status {
+  position: absolute; top: 6px; left: 6px;
+  z-index: 2;
+  border: none;
+  border-radius: 20px;
+  padding: 3px 8px;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: rgba(10, 10, 10, .78);
+  color: var(--ink-faint);
+  transition: background-color .15s ease, color .15s ease;
+}
+.status:hover { color: var(--ink); }
+.status[data-status="Ordered"] { color: var(--ink-dim); }
+.status[data-status="Arrived"] { color: var(--bright); }
+.status[data-status="Installed"] {
+  background: rgba(240, 240, 240, .93);
+  color: #101010;
+  font-weight: 700;
+}
+.status[data-status="Installed"]:hover { background: #fff; color: #000; }
+
 .counter {
   position: absolute; bottom: 6px; right: 6px;
   background: rgba(10, 10, 10, .78);
@@ -560,6 +599,39 @@ html, body {
 .meta-row { gap: 5px; padding-left: 6px; }
 .f-title { font-weight: 600; }
 .f-price, .f-qty { font-variant-numeric: tabular-nums; }
+
+/* Interactive version of the label. Fixed width so choosing a longer type
+   doesn't shove the name field around; the text ellipsises instead. */
+.f-type {
+  flex: 0 0 92px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  padding: 2px 4px;
+  cursor: pointer;
+  text-align: left;
+  transition: background-color .16s ease, color .16s ease;
+}
+.ft-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Drawn as a triangle rather than a glyph, so it needs no font support. Sits
+   directly after the name, not pushed to the far edge of the fixed slot. */
+.f-type::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 0; height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: .75;
+}
+.f-type:hover { background: rgba(255, 255, 255, .034); color: var(--ink-dim); }
 
 /* The URL keeps hyperlink blue — the one deliberate hue in the interface,
    because a link that isn't blue doesn't read as a link. The selector has to

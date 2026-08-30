@@ -16,7 +16,7 @@
     <div class="brand">
       <span class="mark"></span>
       <strong>GCL</strong>
-      <span class="sub">Guitar Checklist</span>
+      <span class="sub">Guitar Part Checklist</span>
     </div>
 
     <div class="board-name">
@@ -118,6 +118,9 @@
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 4.5 L16.5 12 L7.5 19.5"/></svg>
         </button>
         <div class="counter" hidden></div>
+        <!-- Mirrors the image counter opposite it: same dark capsule, which
+             already reads over any product photo. -->
+        <button type="button" class="status" data-status="Wishlist">Wishlist</button>
       </div>
 
       <div class="msg" hidden></div>
@@ -125,11 +128,15 @@
       <!-- Each field sits in a wrapper that carries the hover panel, so the
            field itself can be masked without fading that panel's edge. -->
       <div class="row meta-row">
-        <span class="f-label">Name</span>
+        <!-- The type doubles as the name field's label: it says what kind of
+             part this is, the field beside it says which one. -->
+        <button type="button" class="f-label f-type" aria-label="Part type">
+          <span class="ft-text">Part</span>
+        </button>
         <span class="fw fw-title">
-          <input class="f-title" type="text" spellcheck="false">
+          <input class="f-title" type="text" placeholder="Name" spellcheck="false">
         </span>
-        <span class="f-label">Price</span>
+        <span class="f-label">USD</span>
         <span class="fw fw-price">
           <input class="f-price" type="text" inputmode="decimal" placeholder="0.00">
         </span>

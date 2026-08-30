@@ -498,6 +498,18 @@
     refs.msg.className = 'msg ' + (kind || '');
   }
 
+  // The build total is a plain sum and assumes one currency, so a symbol here
+  // is a label rather than a conversion.
+  var CURRENCY = {
+    USD: '$', CAD: '$', AUD: '$', NZD: '$',
+    GBP: '£', EUR: '€', JPY: '¥'
+  };
+
+  function currencySymbol(code) {
+    if (!code) return '$';
+    return CURRENCY[String(code).toUpperCase()] || '';
+  }
+
   function normalizeUrl(raw) {
     var u = String(raw == null ? '' : raw).trim();
     if (!u) return '';
@@ -559,6 +571,13 @@
       block.title = data.title.split(/\s+[|–—-]\s+/)[0].slice(0, 70);
       refs.title.value = block.title;
     }
+    // Only fill a price the user hasn't set, so a hand-entered figure or one
+    // from a previous fetch is never overwritten.
+    if (!String(block.price || '').trim() && data.price != null) {
+      block.price = currencySymbol(data.currency) + Number(data.price).toFixed(2);
+      refs.price.value = block.price;
+      recomputeTotal();
+    }
     refs.open.hidden = false;
     refs.open.href = block.url;
 
@@ -595,6 +614,8 @@
         w: CARD_W,
         h: CARD_H,
         z: state.seq,
+        type: DEFAULT_TYPE,
+        status: DEFAULT_STATUS,
         url: '',
         title: '',
         price: '',
@@ -624,6 +645,9 @@
       prev: el.querySelector('.prev'),
       next: el.querySelector('.next'),
       counter: el.querySelector('.counter'),
+      type: el.querySelector('.f-type'),
+      typeText: el.querySelector('.ft-text'),
+      status: el.querySelector('.status'),
       title: el.querySelector('.f-title'),
       price: el.querySelector('.f-price'),
       qty: el.querySelector('.f-qty'),
@@ -654,6 +678,12 @@
     // blank qty is brought up to the default on load.
     if (!block.qty) block.qty = '1';
     refs.qty.value = block.qty;
+    // Boards saved before part types and statuses existed take the defaults.
+    if (!block.type) block.type = DEFAULT_TYPE;
+    refs.typeText.textContent = block.type;
+    if (!block.status) block.status = DEFAULT_STATUS;
+    refs.status.dataset.status = block.status;
+    refs.status.textContent = block.status;
     refs.url.value = block.url || '';
     refs.notes.value = block.notes || '';
     if (block.url) {
@@ -748,6 +778,14 @@
 
     refs.manual.addEventListener('click', function () {
       askPasteUrl(refs.manual, addImage);
+    });
+
+    refs.type.addEventListener('click', function () {
+      openTypePicker(block, refs);
+    });
+
+    refs.status.addEventListener('click', function () {
+      openStatusPicker(block, refs);
     });
 
     // Delete asks first, via the shared popup anchored under this button.
@@ -1149,6 +1187,7 @@
   function closeCtx() {
     ctx.classList.remove('show');
     ctx.classList.remove('dimmed');
+    ctx.classList.remove('picker');
   }
   function dimCtx() { ctx.classList.add('dimmed'); }
   function undimCtx() { ctx.classList.remove('dimmed'); }
@@ -1170,6 +1209,7 @@
       b.type = 'button';
       b.textContent = item.label;
       if (item.danger) b.className = 'danger';
+      if (item.on) b.classList.add('on');
       b.addEventListener('click', function () {
         // The menu stays open behind these, dimmed, with the popup straddling
         // the row so the two read as one control. Dim *after* opening: each
@@ -1216,6 +1256,53 @@
   window.addEventListener('blur', function () {
     closeCtx(); closeConfirm(); closePaste();
   });
+
+  /* ----------------------------------------------------------- part types */
+
+  // Ordered roughly the way a guitar goes together, so the menu reads like a
+  // build rather than an alphabetical list. "Part" is the untyped default.
+  var PART_TYPES = [
+    'Part',
+    'Body', 'Neck', 'Fretboard', 'Frets', 'Nut',
+    'Pickups', 'Electronics', 'Knobs', 'Switch', 'Jack',
+    'Bridge', 'Tailpiece', 'Tuners', 'Pickguard', 'Hardware',
+    'Strings', 'Finish', 'Tools', 'Other'
+  ];
+  var DEFAULT_TYPE = 'Part';
+
+  // Where a part is in the process of actually getting onto the guitar.
+  var STATUSES = ['Wishlist', 'Ordered', 'Arrived', 'Installed'];
+  var DEFAULT_STATUS = 'Wishlist';
+
+  /** Opens a list under `anchor`, marking the current value. */
+  function openPicker(anchor, options, current, choose) {
+    var r = anchor.getBoundingClientRect();
+    openCtx(r.left, r.bottom + 4, options.map(function (name) {
+      return {
+        label: name,
+        on: current === name,
+        run: function () { choose(name); }
+      };
+    }));
+    ctx.classList.add('picker');
+  }
+
+  function openTypePicker(block, refs) {
+    openPicker(refs.type, PART_TYPES, block.type || DEFAULT_TYPE, function (name) {
+      block.type = name;
+      refs.typeText.textContent = name;
+      save();
+    });
+  }
+
+  function openStatusPicker(block, refs) {
+    openPicker(refs.status, STATUSES, block.status || DEFAULT_STATUS, function (name) {
+      block.status = name;
+      refs.status.dataset.status = name;
+      refs.status.textContent = name;
+      save();
+    });
+  }
 
   function duplicateBlock(block) {
     var copy = JSON.parse(JSON.stringify(block));
