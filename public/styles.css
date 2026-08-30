@@ -16,7 +16,7 @@
 
   /* Field labels sit just above the card in value. Must stay lighter than
      --panel, but well below --ink so the values still read first. */
-  --label: #3a3a3a;
+  --label: #5a5a5a;
 
   /* The two deliberate exceptions to the greyscale rule: hyperlink blue for
      URLs, and a warning orange for failed lookups. */
@@ -36,9 +36,9 @@
   --bright-ink: #101010;
 
   /* Connectors: barely there until they matter. */
-  --port: #303030;
+  --port: #232323;
   --port-live: #d8d8d8;
-  --wire: #4e4e4e;
+  --wire: #7d7d7d;
 
   --radius: 10px;
   --thumb-radius: 8px;
@@ -208,22 +208,29 @@ html, body {
    they read as sockets on the boundary rather than decorations inside it. */
 .port {
   position: absolute;
-  width: 12px; height: 12px;
+  width: 9px; height: 9px;
   border-radius: 50%;
   background: var(--port);
   cursor: crosshair;
   z-index: 3;
   transition: background-color .15s ease, box-shadow .15s ease;
 }
+/* The visible dot is small, so an invisible collar keeps it easy to grab.
+   elementFromPoint reports the .port itself, so hit-testing is unaffected. */
+.port::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
 .port:hover { background: #8a8a8a; }
 .port.live {
   background: var(--port-live);
-  box-shadow: 0 0 0 3px rgba(216, 216, 216, .14);
+  box-shadow: 0 0 0 2px rgba(216, 216, 216, .14);
 }
-.port.pl { left: -6px; top: calc(50% - 6px); }
-.port.pr { right: -6px; top: calc(50% - 6px); }
-.port.pt { top: -6px; left: calc(50% - 6px); }
-.port.pb { bottom: -6px; left: calc(50% - 6px); }
+.port.pl { left: -4.5px; top: calc(50% - 4.5px); }
+.port.pr { right: -4.5px; top: calc(50% - 4.5px); }
+.port.pt { top: -4.5px; left: calc(50% - 4.5px); }
+.port.pb { bottom: -4.5px; left: calc(50% - 4.5px); }
 
 /* ---------- card ---------- */
 
@@ -336,7 +343,7 @@ html, body {
   width: 100%;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 3px;
   color: var(--ink);
   font: inherit;
   font-size: 12.5px;
@@ -404,7 +411,7 @@ html, body {
 /* Pulled tight to the top edge and to the photo below it. */
 .fields > .url-row {
   margin: -3px 0 -2px;
-  border-radius: 6px;
+  border-radius: 3px;
   transition: background-color .16s ease;
 }
 .url-row:hover { background: rgba(255, 255, 255, .055); }
@@ -447,6 +454,8 @@ html, body {
   display: inline-flex;
   align-items: center;
   line-height: 1;
+  /* Brighten on approach rather than snapping to the lit state. */
+  transition: color .16s ease;
 }
 .card-tools .open { color: var(--ink-dim); text-decoration: none; }
 .card-tools .open:hover { color: var(--bright); }
