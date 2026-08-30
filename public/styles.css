@@ -280,7 +280,7 @@ html, body {
 }
 /* Recedes while a popup of its own is open, so the popup reads as the thing
    being answered. The popup is a sibling, so it stays at full strength. */
-.ctx.dimmed { filter: brightness(.45); }
+.ctx.dimmed { filter: brightness(.7); }
 .ctx.show {
   opacity: 1;
   visibility: visible;
@@ -416,20 +416,26 @@ html, body {
   position: absolute; top: 50%; transform: translateY(-50%);
   width: 28px; height: 28px;
   padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: transparent;
   color: var(--bright);
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 25px;
+  font-weight: 300;
   line-height: 1;
   opacity: 0;
   text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
   transition: opacity .12s, background-color .16s ease;
 }
+/* Stretched horizontally on the glyph alone, so the chevron spans wider while
+   its stroke stays thin and the button's hover box stays square. */
+.nav span { display: block; transform: scaleX(1.45); }
 .thumb:hover .nav { opacity: 1; }
-.nav:hover { background: rgba(10, 10, 10, .55); }
+.nav:hover { background: rgba(255, 255, 255, .16); }
 /* Inset from the edge so they float inside the rounded photo rather than
    being sliced by its corner radius. */
 .nav.prev { left: 5px; }
@@ -691,4 +697,14 @@ html, body {
 @media (max-width: 720px) {
   .bar { padding: 7px var(--frame); }
   .bar-actions { gap: 6px; }
+}
+
+/* Undo/redo go flat when there's nothing left on their stack. */
+.btn:disabled {
+  opacity: .32;
+  cursor: default;
+}
+.btn:disabled:hover {
+  background: var(--panel-2);
+  border-color: var(--edge);
 }

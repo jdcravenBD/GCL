@@ -17,6 +17,8 @@
   var tpl = document.getElementById('card-tpl');
   var totalEl = document.getElementById('total');
   var importFile = document.getElementById('import-file');
+  var undoBtn = document.getElementById('undo');
+  var redoBtn = document.getElementById('redo');
 
   var state = { name: '', blocks: [], links: [], view: { x: 60, y: 40, s: 1 }, seq: 1 };
   var nodes = new Map(); // block.id -> { el, refs }
@@ -44,13 +46,98 @@
   var saveTimer = null;
   function save() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(function () {
-      try {
-        localStorage.setItem(KEY, JSON.stringify(state));
-      } catch (e) {
-        console.warn('Could not save board:', e);
-      }
-    }, 250);
+    saveTimer = setTimeout(writeNow, 250);
+    scheduleCommit();
+  }
+
+  function writeNow() {
+    clearTimeout(saveTimer);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch (e) {
+      console.warn('Could not save board:', e);
+    }
+  }
+
+  /* --------------------------------------------------------------- history */
+
+  // Snapshot-based undo. The view (pan/zoom) is deliberately left out — moving
+  // the camera isn't an edit, and shouldn't consume an undo step.
+  var undoStack = [];
+  var redoStack = [];
+  var lastSnap = null;
+  var commitTimer = null;
+  var MAX_HISTORY = 80;
+
+  function snapshot() {
+    return JSON.stringify({
+      name: state.name,
+      blocks: state.blocks,
+      links: state.links,
+      seq: state.seq
+    });
+  }
+
+  /** Records the current state as an undo step, if anything actually changed. */
+  function commitNow() {
+    clearTimeout(commitTimer);
+    var next = snapshot();
+    if (lastSnap === null || next === lastSnap) {
+      lastSnap = next;
+      return;
+    }
+    undoStack.push(lastSnap);
+    if (undoStack.length > MAX_HISTORY) undoStack.shift();
+    redoStack.length = 0;
+    lastSnap = next;
+    refreshHistoryButtons();
+  }
+
+  // Delayed so a burst of typing collapses into one undo step rather than one
+  // per keystroke. Discrete actions all route through save() too, so they land
+  // as their own step once the user pauses.
+  function scheduleCommit() {
+    clearTimeout(commitTimer);
+    commitTimer = setTimeout(commitNow, 650);
+  }
+
+  function applySnapshot(json) {
+    var d = JSON.parse(json);
+    nodes.forEach(function (n) { n.el.remove(); });
+    nodes.clear();
+    state.name = d.name;
+    state.blocks = d.blocks;
+    state.links = d.links;
+    state.seq = d.seq;
+    boardNameInput.value = state.name || '';
+    state.blocks.forEach(mountBlock);
+    refreshEmptyHint();
+    recomputeTotal();
+    renderWires();
+    writeNow();
+  }
+
+  function undo() {
+    commitNow(); // fold in anything still pending before stepping back
+    if (!undoStack.length) return;
+    redoStack.push(lastSnap);
+    applySnapshot(undoStack.pop());
+    lastSnap = snapshot();
+    refreshHistoryButtons();
+  }
+
+  function redo() {
+    clearTimeout(commitTimer);
+    if (!redoStack.length) return;
+    undoStack.push(lastSnap);
+    applySnapshot(redoStack.pop());
+    lastSnap = snapshot();
+    refreshHistoryButtons();
+  }
+
+  function refreshHistoryButtons() {
+    undoBtn.disabled = undoStack.length === 0;
+    redoBtn.disabled = redoStack.length === 0;
   }
 
   /* ----------------------------------------------------------------- view */
@@ -933,6 +1020,26 @@
   });
   document.getElementById('zoom-reset').addEventListener('click', resetView);
 
+  undoBtn.addEventListener('click', undo);
+  redoBtn.addEventListener('click', redo);
+
+  // Ctrl+Z / Ctrl+Y (and Ctrl+Shift+Z). Skipped while a field has focus so the
+  // browser's own text undo keeps working inside inputs.
+  document.addEventListener('keydown', function (e) {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+    var el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return;
+
+    var key = e.key.toLowerCase();
+    if (key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      undo();
+    } else if (key === 'y' || (key === 'z' && e.shiftKey)) {
+      e.preventDefault();
+      redo();
+    }
+  });
+
   /* ---------------------------------------------------------- confirmation */
 
   var confirmEl = document.getElementById('confirm');
@@ -946,7 +1053,7 @@
    * of its height so its top sits over the anchor — used from the context
    * menu, where it should read as belonging to the row it came from.
    */
-  function placePopup(el, anchor, overlap) {
+  function placePopup(el, anchor, overlap, alignLeft) {
     // visibility:hidden still lays out, so it measures before being shown.
     el.style.left = '0px';
     el.style.top = '0px';
@@ -954,7 +1061,10 @@
     var h = el.offsetHeight;
 
     var r = anchor.getBoundingClientRect();
-    var left = Math.min(r.right - w, window.innerWidth - w - 8);
+    // Right-aligned by default, which throws a wide popup far to the left of a
+    // narrow anchor. alignLeft starts it at the anchor instead.
+    var left = alignLeft ? r.left : r.right - w;
+    left = Math.min(left, window.innerWidth - w - 8);
     var top = overlap ? r.bottom - Math.round(h / 3) : r.bottom + 5;
     if (top + h > window.innerHeight - 8) top = r.top - h - 5; // flip above
 
@@ -989,7 +1099,7 @@
     pasteAction = onSubmit;
     pasteInput.value = '';
     pasteInput.classList.remove('bad');
-    placePopup(pastePop, anchor, overlap);
+    placePopup(pastePop, anchor, overlap, true);
     pastePop.classList.add('show');
     setTimeout(function () { pasteInput.focus(); }, 20);
   }
@@ -1263,4 +1373,8 @@
   refreshEmptyHint();
   recomputeTotal();
   renderWires();
+
+  // Baseline for the history stack: the board as it was loaded.
+  lastSnap = snapshot();
+  refreshHistoryButtons();
 })();

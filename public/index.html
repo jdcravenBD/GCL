@@ -28,6 +28,10 @@
   <div class="bar-actions">
     <button id="add" class="btn primary">+ Add part</button>
     <div class="group">
+      <button id="undo" class="btn icon" title="Undo (Ctrl+Z)">&#8630;</button>
+      <button id="redo" class="btn icon" title="Redo (Ctrl+Y)">&#8631;</button>
+    </div>
+    <div class="group">
       <button id="zoom-out" class="btn icon" title="Zoom out">&minus;</button>
       <button id="zoom-reset" class="btn" title="Reset view">100%</button>
       <button id="zoom-in" class="btn icon" title="Zoom in">+</button>
@@ -104,8 +108,10 @@
           <small>Paste a product URL above</small>
         </div>
         <div class="thumb-status" hidden></div>
-        <button class="nav prev" title="Previous image" hidden>&#8249;</button>
-        <button class="nav next" title="Next image" hidden>&#8250;</button>
+        <!-- Glyph wrapped so it can be stretched without distorting the
+             button's square hover box. -->
+        <button class="nav prev" title="Previous image" hidden><span>&#8249;</span></button>
+        <button class="nav next" title="Next image" hidden><span>&#8250;</span></button>
         <div class="counter" hidden></div>
       </div>
 
