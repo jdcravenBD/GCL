@@ -47,7 +47,7 @@
 
   /* Thickness of the rail that runs down the sides and along the bottom, and
      the radius of the canvas corners that sit inside it. */
-  --frame: 9px;
+  --frame: 13px;
   --inner-radius: 12px;
 
   --font: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -109,7 +109,7 @@ html, body {
   z-index: 20;
 }
 
-.bar-left { display: flex; align-items: center; gap: 18px; min-width: 0; }
+.bar-left { display: flex; align-items: center; gap: 22px; min-width: 0; }
 .brand { display: flex; align-items: baseline; gap: 8px; }
 .brand .mark {
   width: 10px; height: 10px; border-radius: 2px;
@@ -120,28 +120,37 @@ html, body {
 .brand strong { letter-spacing: 0.08em; font-size: 15px; }
 .brand .sub { color: var(--ink-faint); font-size: 15px; }
 
-/* Same borderless treatment as the card fields, scaled up for the header. */
-.board-name { display: flex; align-items: center; gap: 8px; min-width: 0; }
+/* Same borderless treatment as the card fields, scaled up for the header.
+   A rule and a wide gutter hold it clear of the GCL wordmark so the two don't
+   read as one run of text. */
+.board-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-left: 22px;
+  border-left: 1px solid var(--edge);
+}
 .bn-label {
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   color: var(--label);
   white-space: nowrap;
   user-select: none;
 }
 #board-name {
   min-width: 0;
-  width: 190px;
+  width: 230px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: 5px;
   color: var(--ink);
   font: inherit;
-  font-size: 14.5px;
+  font-size: 17px;
   font-weight: 600;
-  padding: 5px 7px;
+  padding: 5px 8px;
   transition: background-color .16s ease;
 }
 #board-name::placeholder { color: var(--ink-ghost); }
@@ -150,6 +159,14 @@ html, body {
 
 .bar-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .group { display: flex; gap: 4px; }
+
+/* Divides the board actions from the dev typeface switcher. */
+.bar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--edge);
+}
 
 .btn {
   background: var(--panel-2);
@@ -199,6 +216,9 @@ html, body {
   overflow: hidden;
   cursor: grab;
   background-color: var(--bg);
+  /* Hairline where the frame meets the canvas. An inset shadow rather than a
+     border, so it adds no layout box and the world origin stays put. */
+  box-shadow: inset 0 0 0 1px var(--edge);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='44' height='44'%3E%3Cpath d='M22 18.5v7M18.5 22h7' stroke='%23181818' stroke-width='1.75' stroke-linecap='round'/%3E%3C/svg%3E");
   background-size: var(--cell) var(--cell);
   background-repeat: repeat;
@@ -223,6 +243,64 @@ html, body {
 }
 .empty-hint strong { color: var(--ink-dim); }
 
+/* ---------- marquee ---------- */
+
+/* Ctrl/Shift-drag on the canvas. Drawn in stage coordinates, above the cards
+   but inert — it selects nothing yet. */
+#marquee {
+  position: absolute;
+  display: none;
+  z-index: 40;
+  border: 1px solid rgba(255, 255, 255, .5);
+  background: rgba(255, 255, 255, .06);
+  border-radius: 2px;
+  pointer-events: none;
+}
+#marquee.on { display: block; }
+
+/* ---------- context menu ---------- */
+
+.ctx {
+  position: fixed;
+  z-index: 60;
+  min-width: 160px;
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .68);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-5px) scale(.98);
+  transform-origin: top left;
+  transition: opacity .12s ease, transform .12s ease, visibility .12s;
+}
+.ctx.show {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+.ctx button {
+  display: flex;
+  align-items: center;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  padding: 7px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color .12s ease, color .12s ease;
+}
+.ctx button:hover { background: rgba(255, 255, 255, .07); color: var(--ink); }
+.ctx button.danger:hover { color: #fff; }
+.ctx .sep { height: 1px; background: var(--edge); margin: 4px 3px; }
+
 /* ---------- connectors and wires ---------- */
 
 /* The SVG is a 1px anchor at the world origin with clipping switched off, so
@@ -245,6 +323,9 @@ html, body {
   stroke: var(--port-live);
   stroke-dasharray: 5 4;
 }
+/* A wire dropped on nothing dissolves rather than blinking out. */
+.wire-fade { transition: opacity .18s ease; }
+.wire-fade.gone { opacity: 0; }
 
 /* Faint until connected or in play, then bright. Centred on the card edge, so
    they read as sockets on the boundary rather than decorations inside it. */
@@ -512,15 +593,16 @@ html, body {
   cursor: pointer;
 }
 .link-btn:hover { color: var(--ink); }
-.del-wrap { position: relative; margin-left: auto; }
+.link-btn.del { margin-left: auto; }
 .link-btn.del:hover { color: #fff; }
 
-/* Delete confirmation. Kept in the DOM and animated with opacity/transform so
-   it can ease in and out — display:none would skip the transition. */
+/* One shared confirmation, positioned from JS beneath whichever control asked
+   for it — a card's Delete, a context-menu row, or the header's Clear. Kept in
+   the DOM and animated with opacity/transform; display:none would skip the
+   transition. Sits above the context menu so it can overlay a menu row. */
 .confirm {
-  position: absolute;
-  top: calc(100% + 5px);
-  right: 0;
+  position: fixed;
+  z-index: 70;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -529,8 +611,8 @@ html, body {
   border: 1px solid var(--edge);
   border-radius: 6px;
   padding: 1px 5px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .6);
-  z-index: 6;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .65);
+  font-size: 11.5px;
   opacity: 0;
   visibility: hidden;
   transform: translateY(-4px);
@@ -542,6 +624,8 @@ html, body {
   transform: translateY(0);
 }
 .confirm-q { color: var(--ink-dim); padding-right: 2px; }
+/* No longer inside .card-tools, so it needs its own hit padding. */
+.confirm .link-btn { padding: 6px 6px; line-height: 1; }
 .confirm .confirm-yes:hover { color: #fff; }
 
 /* #stage no longer needs a hard-coded top here: --bar-h tracks the real

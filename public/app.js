@@ -200,6 +200,22 @@
     });
   }
 
+  /** Re-draws a dropped wire and dissolves it, so it doesn't just blink out. */
+  function fadeOutWire(d) {
+    var ghost = document.createElementNS(SVG_NS, 'path');
+    ghost.setAttribute('d', d);
+    ghost.setAttribute('class', 'wire wire-pending wire-fade');
+    wires.appendChild(ghost);
+
+    // Force a layout pass so the browser has a "from" value to animate off.
+    void ghost.getBoundingClientRect();
+    ghost.classList.add('gone');
+
+    setTimeout(function () {
+      if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+    }, 220);
+  }
+
   function dropLinksFor(id) {
     state.links = state.links.filter(function (l) {
       return l.a.id !== id && l.b.id !== id;
@@ -249,14 +265,22 @@
           dot.removeEventListener('pointercancel', onUp);
 
           var t = portUnder(ev.clientX, ev.clientY);
-          if (t && t.id !== pending.id && linkIndexAt(t.id, t.side) < 0) {
+          var landed = t && t.id !== pending.id && linkIndexAt(t.id, t.side) < 0;
+          if (landed) {
             state.links.push({
               a: { id: pending.id, side: pending.side },
               b: { id: t.id, side: t.side }
             });
           }
+
+          // Keep the loose wire's shape so it can dissolve instead of
+          // vanishing; renderWires is about to clear the live one.
+          var ghost = wires.querySelector('.wire-pending');
+          var ghostD = ghost && !landed ? ghost.getAttribute('d') : null;
+
           pending = null;
           renderWires();
+          if (ghostD) fadeOutWire(ghostD);
           save();
         }
 
@@ -476,9 +500,6 @@
       open: el.querySelector('.open'),
       manual: el.querySelector('.manual'),
       del: el.querySelector('.del'),
-      confirm: el.querySelector('.confirm'),
-      confirmYes: el.querySelector('.confirm-yes'),
-      confirmNo: el.querySelector('.confirm-no'),
       ports: {
         l: el.querySelector('.port.pl'),
         r: el.querySelector('.port.pr'),
@@ -595,18 +616,51 @@
       save();
     });
 
-    // Delete asks first. The popup is toggled rather than opened, so a second
-    // click on Delete dismisses it.
+    // Delete asks first, via the shared popup anchored under this button.
     refs.del.addEventListener('click', function () {
-      var opening = !refs.confirm.classList.contains('show');
-      closeConfirms();
-      if (opening) refs.confirm.classList.add('show');
+      askConfirm(refs.del, function () { removeBlock(block.id); });
     });
-    refs.confirmYes.addEventListener('click', function () {
-      removeBlock(block.id);
-    });
-    refs.confirmNo.addEventListener('click', function () {
-      refs.confirm.classList.remove('show');
+
+    // Right-click anywhere on the block that isn't a field or a button. Over
+    // those, the browser's own menu is left alone so copy/paste still works.
+    el.addEventListener('contextmenu', function (e) {
+      if (e.target.closest(NO_DRAG)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      bringToFront(block, el);
+      closeConfirm();
+
+      var items = [
+        { label: 'Duplicate', run: function () { duplicateBlock(block); } },
+        { label: 'Bring to front', run: function () { bringToFront(block, el); save(); } },
+        { label: 'Paste image URL…', run: function () { refs.manual.click(); } }
+      ];
+      if (block.url) {
+        items.push({
+          label: 'Open product page',
+          run: function () { window.open(block.url, '_blank', 'noopener'); }
+        });
+      }
+      if ((block.images || []).length) {
+        items.push({
+          label: 'Clear images',
+          run: function () {
+            block.images = [];
+            block.imgIndex = 0;
+            showImage(block, refs);
+            save();
+          }
+        });
+      }
+      items.push('-');
+      items.push({
+        label: 'Delete part',
+        danger: true,
+        confirm: true,
+        run: function () { removeBlock(block.id); }
+      });
+
+      openCtx(e.clientX, e.clientY, items);
     });
 
     dragBehaviour(el, block, refs);
@@ -646,13 +700,6 @@
     save();
   }
 
-  /** Dismiss every open delete confirmation. */
-  function closeConfirms() {
-    nodes.forEach(function (n) {
-      n.refs.confirm.classList.remove('show');
-    });
-  }
-
   function bringToFront(block, el) {
     block.z = ++state.seq;
     el.style.zIndex = block.z;
@@ -670,7 +717,7 @@
       // Returns above for buttons and fields, so this only fires on a genuine
       // card drag — clicking Delete itself won't close its own popup.
       if (e.target.closest(NO_DRAG)) return;
-      closeConfirms();
+      closeConfirm();
 
       e.preventDefault();
       e.stopPropagation();
@@ -707,6 +754,66 @@
 
   /* -------------------------------------------------------- canvas panning */
 
+  // Right-click on bare canvas.
+  stage.addEventListener('contextmenu', function (e) {
+    if (e.target !== stage && e.target !== world && e.target !== emptyHint) return;
+    e.preventDefault();
+    closeConfirm();
+
+    // Remember where the click landed so a new part lands there too.
+    var spot = toWorld(e.clientX, e.clientY);
+    openCtx(e.clientX, e.clientY, [
+      {
+        label: '+ Add part',
+        // Top-left corner lands on the cursor, not the block's centre.
+        run: function () {
+          createBlock({ x: Math.round(spot.x), y: Math.round(spot.y) });
+        }
+      },
+      { label: 'Reset view', run: resetView },
+      '-',
+      { label: 'Clear board', danger: true, confirm: true, run: clearBoard }
+    ]);
+  });
+
+  var marquee = document.getElementById('marquee');
+
+  /** Draws the selection rectangle. Purely visual at this stage. */
+  function startMarquee(e) {
+    var box = stage.getBoundingClientRect();
+    var x0 = e.clientX - box.left;
+    var y0 = e.clientY - box.top;
+
+    marquee.classList.add('on');
+    marquee.style.left = x0 + 'px';
+    marquee.style.top = y0 + 'px';
+    marquee.style.width = '0px';
+    marquee.style.height = '0px';
+
+    try { stage.setPointerCapture(e.pointerId); } catch (err) { /* no capture */ }
+
+    function onMove(ev) {
+      var x1 = ev.clientX - box.left;
+      var y1 = ev.clientY - box.top;
+      marquee.style.left = Math.min(x0, x1) + 'px';
+      marquee.style.top = Math.min(y0, y1) + 'px';
+      marquee.style.width = Math.abs(x1 - x0) + 'px';
+      marquee.style.height = Math.abs(y1 - y0) + 'px';
+    }
+
+    function onUp(ev) {
+      try { stage.releasePointerCapture(ev.pointerId); } catch (err) { /* never captured */ }
+      stage.removeEventListener('pointermove', onMove);
+      stage.removeEventListener('pointerup', onUp);
+      stage.removeEventListener('pointercancel', onUp);
+      marquee.classList.remove('on');
+    }
+
+    stage.addEventListener('pointermove', onMove);
+    stage.addEventListener('pointerup', onUp);
+    stage.addEventListener('pointercancel', onUp);
+  }
+
   stage.addEventListener('pointerdown', function (e) {
     if (e.button !== 0 && e.button !== 1) return;
     if (e.target !== stage && e.target !== world && e.target !== emptyHint) return;
@@ -716,10 +823,19 @@
     // there. For the URL field this is also what triggers its image fetch.
     var active = document.activeElement;
     if (active && active.closest && active.closest('.card')) active.blur();
-    closeConfirms();
+    closeConfirm();
+    closeCtx();
 
     e.preventDefault();
-    stage.setPointerCapture(e.pointerId);
+
+    // Ctrl or Shift turns the drag into a selection marquee instead of a pan.
+    // It only draws for now — nothing is selected by it yet.
+    if (e.button === 0 && (e.ctrlKey || e.shiftKey)) {
+      startMarquee(e);
+      return;
+    }
+
+    try { stage.setPointerCapture(e.pointerId); } catch (err) { /* no capture */ }
     stage.classList.add('panning');
 
     var startX = e.clientX;
@@ -769,11 +885,130 @@
   document.getElementById('zoom-out').addEventListener('click', function () {
     zoomAt(stage.clientWidth / 2, stage.clientHeight / 2 + 56, 1 / 1.15);
   });
-  document.getElementById('zoom-reset').addEventListener('click', function () {
+  document.getElementById('zoom-reset').addEventListener('click', resetView);
+
+  /* ---------------------------------------------------------- confirmation */
+
+  var confirmEl = document.getElementById('confirm');
+  var confirmAction = null;
+
+  function closeConfirm() {
+    confirmEl.classList.remove('show');
+    confirmAction = null;
+  }
+
+  /** Drop the shared "Are you sure?" beneath `anchor`, running `onYes` if taken. */
+  function askConfirm(anchor, onYes) {
+    confirmAction = onYes;
+
+    // visibility:hidden still lays out, so it measures before being shown.
+    confirmEl.style.left = '0px';
+    confirmEl.style.top = '0px';
+    var w = confirmEl.offsetWidth;
+    var h = confirmEl.offsetHeight;
+
+    var r = anchor.getBoundingClientRect();
+    var left = Math.min(r.right - w, window.innerWidth - w - 8);
+    var top = r.bottom + 5;
+    if (top + h > window.innerHeight - 8) top = r.top - h - 5; // flip above
+
+    confirmEl.style.left = Math.max(8, left) + 'px';
+    confirmEl.style.top = Math.max(8, top) + 'px';
+    confirmEl.classList.add('show');
+  }
+
+  confirmEl.querySelector('.confirm-yes').addEventListener('click', function () {
+    var run = confirmAction;
+    closeConfirm();
+    closeCtx();
+    if (run) run();
+  });
+  confirmEl.querySelector('.confirm-no').addEventListener('click', closeConfirm);
+
+  /* --------------------------------------------------------- context menu */
+
+  var ctx = document.getElementById('ctx');
+
+  function closeCtx() { ctx.classList.remove('show'); }
+
+  /**
+   * items: array of { label, run, danger } or the string '-' for a separator.
+   * Placed at the cursor, nudged back inside the window if it would overflow.
+   */
+  function openCtx(clientX, clientY, items) {
+    ctx.innerHTML = '';
+    items.forEach(function (item) {
+      if (item === '-') {
+        var sep = document.createElement('div');
+        sep.className = 'sep';
+        ctx.appendChild(sep);
+        return;
+      }
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = item.label;
+      if (item.danger) b.className = 'danger';
+      b.addEventListener('click', function () {
+        if (item.confirm) {
+          // Menu stays open so the confirmation reads as dropping from the row.
+          askConfirm(b, item.run);
+          return;
+        }
+        closeCtx();
+        item.run();
+      });
+      ctx.appendChild(b);
+    });
+
+    // visibility:hidden still lays out, so it can be measured before showing.
+    ctx.style.left = '0px';
+    ctx.style.top = '0px';
+    var w = ctx.offsetWidth;
+    var h = ctx.offsetHeight;
+    ctx.style.left = Math.max(8, Math.min(clientX, window.innerWidth - w - 8)) + 'px';
+    ctx.style.top = Math.max(8, Math.min(clientY, window.innerHeight - h - 8)) + 'px';
+    ctx.classList.add('show');
+  }
+
+  // Any press outside the menu dismisses it. Right-clicks land here first and
+  // the contextmenu event that follows reopens it in the new place.
+  document.addEventListener('pointerdown', function (e) {
+    if (confirmEl.contains(e.target)) return; // let Yes/No handle their click
+    if (!ctx.contains(e.target)) closeCtx();
+    closeConfirm();
+  }, true);
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { closeCtx(); closeConfirm(); }
+  });
+  window.addEventListener('blur', function () { closeCtx(); closeConfirm(); });
+
+  function duplicateBlock(block) {
+    var copy = JSON.parse(JSON.stringify(block));
+    copy.id = 'b' + state.seq++;
+    copy.x = block.x + 26;
+    copy.y = block.y + 26;
+    copy.z = state.seq;
+    state.blocks.push(copy);
+    mountBlock(copy);
+    refreshEmptyHint();
+    recomputeTotal();
+    save();
+  }
+
+  function resetView() {
     state.view = { x: 60, y: 40, s: 1 };
     applyView();
     save();
-  });
+  }
+
+  /** Empties the board but keeps its name. Callers ask for confirmation. */
+  function clearBoard() {
+    resetBoard({
+      name: state.name, blocks: [], links: [],
+      view: { x: 60, y: 40, s: 1 }, seq: 1
+    });
+  }
 
   /* ---------------------------------------------------------- header size */
 
@@ -847,11 +1082,11 @@
     importFile.value = '';
   });
 
-  document.getElementById('clear').addEventListener('click', function () {
+  // Shares clearBoard with the canvas context menu; both confirm first.
+  var clearBtn = document.getElementById('clear');
+  clearBtn.addEventListener('click', function () {
     if (!state.blocks.length) return;
-    if (!confirm('Delete all ' + state.blocks.length + ' parts from this board?')) return;
-    // Clearing empties the board but keeps what it's called.
-    resetBoard({ name: state.name, blocks: [], links: [], view: { x: 60, y: 40, s: 1 }, seq: 1 });
+    askConfirm(clearBtn, clearBoard);
   });
 
   function resetBoard(data) {

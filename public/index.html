@@ -42,6 +42,8 @@
       <button id="clear" class="btn danger">Clear</button>
     </div>
 
+    <span class="bar-sep"></span>
+
     <!-- Dev-only typeface switcher. Each button previews its own face. -->
     <div class="group fonts" title="Typeface (dev)">
       <button class="btn font-btn" data-font="ui">Segoe</button>
@@ -63,7 +65,20 @@
     Click <strong>+ Add part</strong> to drop your first block.<br>
     Drag the background to pan &middot; Scroll to zoom
   </p>
+
+  <!-- Ctrl/Shift-drag marquee. Visual only for now. -->
+  <div id="marquee"></div>
 </main>
+
+<!-- Shared right-click menu, filled in per context when opened. -->
+<div id="ctx" class="ctx"></div>
+
+<!-- Shared confirmation, dropped beneath whichever control asked for it. -->
+<div id="confirm" class="confirm">
+  <span class="confirm-q">Are you sure?</span>
+  <button type="button" class="link-btn confirm-yes">Yes</button>
+  <button type="button" class="link-btn confirm-no">No</button>
+</div>
 
 <input type="file" id="import-file" accept="application/json" hidden>
 
@@ -106,14 +121,7 @@
       <a class="open" target="_blank" rel="noopener noreferrer" hidden>Open page &#8599;</a>
       <button class="link-btn manual">Paste image URL</button>
 
-      <span class="del-wrap">
-        <button class="link-btn del">Delete</button>
-        <span class="confirm">
-          <span class="confirm-q">Are you sure?</span>
-          <button class="link-btn confirm-yes">Yes</button>
-          <button class="link-btn confirm-no">No</button>
-        </span>
-      </span>
+      <button class="link-btn del">Delete</button>
     </div>
 
     <!-- One connector per side, centred on the edge. -->
